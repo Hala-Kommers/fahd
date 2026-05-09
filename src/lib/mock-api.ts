@@ -1,4 +1,4 @@
-import type { Category, Conversation, Message, Order, Product } from "@shared/schema";
+import type { BotConfig, Category, Conversation, GlobalFaq, Message, Order, Policy, Product } from "@shared/schema";
 
 const products: Product[] = [
   {
@@ -86,9 +86,88 @@ const coupons = {
   SAVE50: { code: "SAVE50", type: "fixed" as const, value: 50 },
 };
 
+let adminLoggedIn = false;
+
+const botConfig: BotConfig = {
+  id: "bot_config_main",
+  provider: "google",
+  model: "google/gemini-2.0-flash-001",
+  apiKey: "mock-key",
+  temperature: 0.7,
+  maxTokens: 1000,
+  enabled: true,
+  persona: {
+    botName: "فهد",
+    tone: "friendly_saudi",
+    style: "balanced",
+    language: "ar-SA",
+    emojiLevel: "medium",
+  },
+  system: {
+    systemPrompt: "ساعد العميل بسرعة وبأسلوب واضح.",
+    allowedSources: ["catalog", "product_faq", "store_policies"],
+    fallbackRule: "اسأل سؤال توضيحي واحد عند الحاجة.",
+    forbiddenClaims: [],
+  },
+  templates: {
+    welcome: "هلا 👋 كيف أقدر أخدمك؟",
+    askVariant: "وش الخيار اللي تفضله؟",
+    askAddress: "اكتب عنوانك بالتفصيل",
+    confirm: "أبشر، نأكد الطلب؟",
+    outOfStock: "للأسف المنتج غير متوفر حالياً",
+    handover: "بحولك لموظف خدمة العملاء",
+  },
+  closing: {
+    requiredFields: ["name", "phone", "address"],
+    paymentMethodsEnabled: ["COD", "Online"],
+    otpMode: "risk_based",
+    showPinLocationButton: "risk_based",
+    addressMinFieldsSA: ["city", "district", "street"],
+    addressConfidenceThresholds: { accept: 80, ask_one_question: 60, require_pin: 40 },
+  },
+};
+
+const policies: Policy[] = [
+  {
+    id: "shipping",
+    title: "سياسة الشحن",
+    content: ["التوصيل خلال 1-3 أيام عمل", "الشحن مجاني للطلبات فوق 200 ريال"],
+    cities: ["الرياض", "جدة", "الدمام"],
+    lastUpdated: new Date().toISOString(),
+    appliesTo: "all",
+  },
+];
+
+let globalFaq: GlobalFaq = {
+  id: "global-faq",
+  items: [
+    { q: "هل يوجد استبدال؟", a: "نعم خلال 7 أيام" },
+    { q: "كم مدة الضمان؟", a: "ضمان سنة" },
+  ],
+};
+
 let orderCounter = 1000;
 const orders = new Map<string, Order>();
 const conversations = new Map<string, Conversation>();
+const conversationMessages = new Map<string, Message[]>();
+
+for (let i = 0; i < 6; i += 1) {
+  const id = `ORD-${900 + i}`;
+  const now = new Date(Date.now() - i * 86400000).toISOString();
+  orders.set(id, {
+    id,
+    orderNumber: id,
+    createdAt: now,
+    status: i % 4 === 0 ? "shipped" : i % 3 === 0 ? "processing" : "new",
+    paymentMethod: i % 2 === 0 ? "COD" : "Online",
+    totals: { subtotal: 220, shipping: 0, discount: 20, grandTotal: 200, currency: "SAR" },
+    customer: { name: `عميل ${i + 1}`, phone: `05000000${i}${i}` },
+    address: { raw: "الرياض، حي الياسمين", city: "الرياض", confidence: 85 },
+    risk: { score: 10 + i, flags: [], otpStatus: "none" },
+    items: [{ title: products[i % products.length].title, qty: 1, unitPrice: 220, lineTotal: 220 }],
+    activityLog: [{ at: now, action: "created" }],
+  });
+}
 
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -158,6 +237,23 @@ function createOrder(payload: any) {
 export async function mockApiRequest(method: string, endpoint: string, body?: unknown) {
   const url = new URL(endpoint, "http://local.mock");
 
+  if (method === "POST" && url.pathname === "/api/auth/login") {
+    const payload = body as { username?: string; password?: string };
+    if (!payload?.username || !payload?.password) return jsonResponse({ message: "بيانات ناقصة" }, 400);
+    adminLoggedIn = true;
+    return jsonResponse({ user: { id: 1, username: payload.username, role: "admin", createdAt: new Date().toISOString() } });
+  }
+
+  if (method === "POST" && url.pathname === "/api/auth/logout") {
+    adminLoggedIn = false;
+    return jsonResponse({ ok: true });
+  }
+
+  if (method === "GET" && url.pathname === "/api/auth/me") {
+    if (!adminLoggedIn) return jsonResponse(null, 401);
+    return jsonResponse({ user: { id: 1, username: "admin", role: "admin", createdAt: new Date().toISOString() } });
+  }
+
   if (method === "GET" && url.pathname === "/api/categories") {
     return jsonResponse(categories);
   }
@@ -193,6 +289,7 @@ export async function mockApiRequest(method: string, endpoint: string, body?: un
     const now = new Date().toISOString();
     const conv: Conversation = { id, userId: "guest", status: "active", createdAt: now, updatedAt: now };
     conversations.set(id, conv);
+    conversationMessages.set(id, []);
     return jsonResponse(conv);
   }
 
@@ -216,7 +313,185 @@ export async function mockApiRequest(method: string, endpoint: string, body?: un
       text: aiText,
       timestamp: now,
     };
+    const existing = conversationMessages.get(payload.conversationId) || [];
+    conversationMessages.set(payload.conversationId, [...existing, userMessage, aiMessage]);
     return jsonResponse({ userMessage, aiMessage });
+  }
+
+  if (method === "GET" && url.pathname === "/api/admin/stats") {
+    return jsonResponse({
+      totalRevenue: 128900,
+      totalOrders: orders.size,
+      totalProducts: products.length,
+      averageOrderValue: 230,
+      topProducts: products.slice(0, 3).map((p) => ({ id: p.id, title: p.title, salesCount: p.salesCount, revenue: p.salesCount * p.pricing.price })),
+    });
+  }
+
+  if (method === "GET" && url.pathname === "/api/admin/products") {
+    return jsonResponse(products);
+  }
+
+  if (method === "POST" && url.pathname === "/api/admin/products") {
+    const payload = body as Partial<Product>;
+    const newItem: Product = {
+      id: `P-${Date.now()}`,
+      title: payload.title || "منتج جديد",
+      sku: payload.sku || `SKU-${Date.now()}`,
+      status: payload.status || "draft",
+      category: payload.category || "عام",
+      descriptionShort: payload.descriptionShort,
+      descriptionLong: payload.descriptionLong,
+      pricing: payload.pricing || { price: 0, currency: "SAR" },
+      images: payload.images || [],
+      inventory: payload.inventory || { mode: "global", stockTotal: 0, lowStockThreshold: 5 },
+      hasVariants: payload.hasVariants || false,
+      variantOptions: payload.variantOptions || [],
+      variants: payload.variants || [],
+      specs: payload.specs || [],
+      faq: payload.faq || [],
+      usageInstructions: payload.usageInstructions,
+      pricingTiers: payload.pricingTiers || [],
+      salesCount: payload.salesCount || 0,
+      rating: payload.rating || 0,
+    };
+    products.unshift(newItem);
+    return jsonResponse(newItem);
+  }
+
+  if (method === "PATCH" && url.pathname.startsWith("/api/admin/products/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop() || "");
+    const idx = products.findIndex((p) => String(p.id) === id);
+    if (idx < 0) return jsonResponse({ message: "Not found" }, 404);
+    products[idx] = { ...products[idx], ...(body as Partial<Product>) };
+    return jsonResponse(products[idx]);
+  }
+
+  if (method === "DELETE" && url.pathname.startsWith("/api/admin/products/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop() || "");
+    const idx = products.findIndex((p) => String(p.id) === id);
+    if (idx >= 0) products.splice(idx, 1);
+    return jsonResponse({ ok: true });
+  }
+
+  if (method === "GET" && url.pathname === "/api/admin/orders") {
+    return jsonResponse(Array.from(orders.values()));
+  }
+
+  if (method === "GET" && url.pathname.startsWith("/api/admin/orders/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop() || "");
+    const order = orders.get(id);
+    return order ? jsonResponse(order) : jsonResponse({ message: "Not found" }, 404);
+  }
+
+  if (method === "PATCH" && url.pathname.startsWith("/api/admin/orders/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop() || "");
+    const order = orders.get(id);
+    if (!order) return jsonResponse({ message: "Not found" }, 404);
+    const status = (body as { status?: Order["status"] })?.status;
+    if (status) order.status = status;
+    orders.set(id, order);
+    return jsonResponse(order);
+  }
+
+  if (method === "GET" && url.pathname === "/api/admin/coupons") {
+    return jsonResponse(Object.values(coupons));
+  }
+
+  if (method === "POST" && url.pathname === "/api/admin/coupons") {
+    const payload = body as { code: string; type: "percentage" | "fixed"; value: number };
+    (coupons as Record<string, { code: string; type: "percentage" | "fixed"; value: number }>)[payload.code.toUpperCase()] = payload;
+    return jsonResponse(payload);
+  }
+
+  if (method === "PATCH" && url.pathname.startsWith("/api/admin/coupons/")) {
+    const code = decodeURIComponent(url.pathname.split("/").pop() || "").toUpperCase();
+    const existing = (coupons as Record<string, any>)[code] || { code };
+    (coupons as Record<string, any>)[code] = { ...existing, ...(body as Record<string, unknown>) };
+    return jsonResponse((coupons as Record<string, any>)[code]);
+  }
+
+  if (method === "DELETE" && url.pathname.startsWith("/api/admin/coupons/")) {
+    const code = decodeURIComponent(url.pathname.split("/").pop() || "").toUpperCase();
+    delete (coupons as Record<string, any>)[code];
+    return jsonResponse({ ok: true });
+  }
+
+  if (method === "GET" && url.pathname === "/api/admin/bot/config") {
+    return jsonResponse(botConfig);
+  }
+
+  if (method === "PATCH" && url.pathname === "/api/admin/bot/config") {
+    Object.assign(botConfig, body as Partial<BotConfig>);
+    return jsonResponse(botConfig);
+  }
+
+  if (method === "POST" && url.pathname === "/api/admin/bot/test-connection") {
+    return jsonResponse({ success: true, reply: "الاتصال ناجح ✅" });
+  }
+
+  if (method === "GET" && url.pathname === "/api/admin/policies") {
+    return jsonResponse(policies);
+  }
+
+  if (method === "POST" && url.pathname === "/api/admin/policies") {
+    const payload = body as Policy;
+    policies.push(payload);
+    return jsonResponse(payload);
+  }
+
+  if (method === "PATCH" && url.pathname.startsWith("/api/admin/policies/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop() || "");
+    const idx = policies.findIndex((p) => p.id === id);
+    if (idx < 0) return jsonResponse({ message: "Not found" }, 404);
+    policies[idx] = { ...policies[idx], ...(body as Partial<Policy>) };
+    return jsonResponse(policies[idx]);
+  }
+
+  if (method === "DELETE" && url.pathname.startsWith("/api/admin/policies/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop() || "");
+    const idx = policies.findIndex((p) => p.id === id);
+    if (idx >= 0) policies.splice(idx, 1);
+    return jsonResponse({ ok: true });
+  }
+
+  if (method === "GET" && url.pathname === "/api/admin/faq") {
+    return jsonResponse(globalFaq);
+  }
+
+  if (method === "PATCH" && url.pathname === "/api/admin/faq") {
+    globalFaq = body as GlobalFaq;
+    return jsonResponse(globalFaq);
+  }
+
+  if (method === "GET" && url.pathname === "/api/admin/ai/stats") {
+    return jsonResponse({
+      ordersStarted: 124,
+      ordersCompleted: 81,
+      conversionRate: 65.3,
+      avgReplyTimeMs: 820,
+      handoffRate: 12.4,
+      topIntents: ["best", "price", "shipping"],
+    });
+  }
+
+  if (method === "GET" && url.pathname === "/api/admin/conversations") {
+    const list = Array.from(conversations.values());
+    if (list.length === 0) {
+      const now = new Date().toISOString();
+      const id = `CONV-${Date.now()}`;
+      const conv: Conversation = { id, userId: "user-123", status: "active", createdAt: now, updatedAt: now, title: "استفسار منتج" };
+      conversations.set(id, conv);
+      conversationMessages.set(id, [{ id: `MSG-${Date.now()}`, conversationId: id, sender: "user", text: "مرحبا", timestamp: now }]);
+    }
+    return jsonResponse(Array.from(conversations.values()));
+  }
+
+  if (method === "GET" && url.pathname.startsWith("/api/admin/conversations/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop() || "");
+    const conv = conversations.get(id);
+    if (!conv) return jsonResponse({ message: "Not found" }, 404);
+    return jsonResponse({ ...conv, messages: conversationMessages.get(id) || [] });
   }
 
   return jsonResponse({ message: `Unhandled mock endpoint: ${method} ${url.pathname}` }, 404);
