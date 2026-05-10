@@ -178,9 +178,9 @@ export default function ProductDetail() {
   const handleQuickChat = (message: string) => {
     setChatProductContext({
       product: product,
-      autoMessage: message,
+      productId: Number(product.id),
+      variantId: selectedVariant?.id != null ? Number(selectedVariant.id) : null,
       image: displayImage,
-      forceAutoSend: true,
     });
     navigate("/chat");
   };
@@ -188,9 +188,9 @@ export default function ProductDetail() {
   const handleOrderNow = () => {
     setChatProductContext({
       product,
-      autoMessage: `أريد طلب المنتج رقم تعريفه ${product.id}`,
+      productId: Number(product.id),
+      variantId: selectedVariant?.id != null ? Number(selectedVariant.id) : null,
       image: displayImage,
-      forceAutoSend: true,
     });
     navigate("/chat");
   };

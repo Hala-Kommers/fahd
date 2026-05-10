@@ -14,7 +14,7 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
-  const { openOrderSheet, addToCart } = useFahd();
+  const { addToCart, setChatProductContext } = useFahd();
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
@@ -125,12 +125,12 @@ export default function ProductCard({ product }: ProductCardProps) {
             className="flex-1 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-semibold min-h-[44px]"
             onClick={(e) => {
               e.stopPropagation();
-              if (hasVariants) {
-                toast({ title: "اختر الخيارات أولاً", description: product.title, variant: "destructive" });
-                navigate(`/product/${product.id}`);
-                return;
-              }
-              openOrderSheet(product);
+              setChatProductContext({
+                product,
+                productId: Number(product.id),
+                image: displayImage,
+              });
+              navigate("/chat");
             }}
             data-testid={`button-order-${product.id}`}
           >

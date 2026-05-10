@@ -357,7 +357,6 @@ export default function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(localStorage.getItem(CHAT_SESSION_ID_KEY));
   const [inputText, setInputText] = useState("");
   const [showWelcome, setShowWelcome] = useState(true);
-  const [autoMessageSent, setAutoMessageSent] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
@@ -494,7 +493,6 @@ export default function ChatPage() {
         setIsHistoryLoaded(false);
         setMessages([]);
         setShowWelcome(true);
-        setAutoMessageSent(false);
         ws.send(JSON.stringify({ type: "init" }));
         return;
       }
@@ -503,7 +501,6 @@ export default function ChatPage() {
         const historyMessages = Array.isArray(data.messages) ? parseHistoryMessages(data.messages) : [];
         setMessages(historyMessages);
         setShowWelcome(historyMessages.length === 0);
-        setAutoMessageSent(historyMessages.length > 0 && !chatProductContext?.forceAutoSend);
         setIsHistoryLoaded(true);
         return;
       }
@@ -658,18 +655,6 @@ export default function ChatPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!chatProductContext || autoMessageSent || !isReady || !isHistoryLoaded) return;
-    if (messages.length > 0 && !chatProductContext.forceAutoSend) return;
-
-    setAutoMessageSent(true);
-    setShowWelcome(false);
-    const text = chatProductContext.autoMessage;
-    const tempId = generateId();
-    setMessages((prev) => [...prev, { id: tempId, sender: "user", text }]);
-    sendSocketData({ type: "message", content: text });
-  }, [chatProductContext, autoMessageSent, isReady, isHistoryLoaded, messages.length, sendSocketData]);
-
   const sendMessage = useCallback((textOverride?: string) => {
     const text = (textOverride || inputText).trim();
     if (!text || !isReady || !isHistoryLoaded || isTyping) return;
@@ -678,8 +663,19 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, { id: tempId, sender: "user", text }]);
     setInputText("");
     setShowWelcome(false);
-    sendSocketData({ type: "message", content: text });
-  }, [inputText, isReady, isHistoryLoaded, isTyping, sendSocketData]);
+    sendSocketData({
+      type: "message",
+      content: text,
+      ...(chatProductContext
+        ? {
+            context: {
+              productId: chatProductContext.productId,
+              ...(chatProductContext.variantId != null ? { variantId: chatProductContext.variantId } : {}),
+            },
+          }
+        : {}),
+    });
+  }, [chatProductContext, inputText, isReady, isHistoryLoaded, isTyping, sendSocketData]);
 
   const handleTileClick = (tile: typeof quickTiles[0]) => {
     setShowWelcome(false);

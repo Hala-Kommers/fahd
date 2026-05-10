@@ -43,9 +43,9 @@ export interface CartItemData {
 
 export interface ChatProductContext {
   product: Product;
-  autoMessage: string;
+  productId: number;
+  variantId?: number | null;
   image: string;
-  forceAutoSend?: boolean;
 }
 
 interface FahdStore {
