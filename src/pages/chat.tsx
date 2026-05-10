@@ -1,13 +1,12 @@
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useFahd } from "@/lib/fahd-store";
 import { useToast } from "@/hooks/use-toast";
-import type { Product, Conversation, Message } from "@shared/schema";
 import {
   ArrowRight,
   Send,
@@ -15,16 +14,40 @@ import {
   Gift,
   ArrowLeftRight,
   TrendingDown,
-  Sparkles,
-  Loader2
+  Loader2,
+  Wifi,
+  WifiOff,
+  Package,
 } from "lucide-react";
 
 interface ChatMsg {
   id: string;
   sender: "fahd" | "user";
   text: string;
-  products?: Product[];
-  actionButtons?: { label: string; productId: number }[];
+  actions?: ChatAction[];
+  meta?: {
+    needsHuman: boolean;
+    orderCreated: boolean;
+    orderId: number | null;
+  };
+}
+
+type ChatAction =
+  | { type: "address_form" }
+  | { type: "order_confirmation" }
+  | { type: "show_product"; payload?: { productId: number } };
+
+interface CityOption {
+  id: number;
+  name: string;
+}
+
+interface AddressFormPayload {
+  customerName: string;
+  customerPhone: string;
+  addressRaw: string;
+  city: string;
+  paymentMethod: string;
 }
 
 const quickTiles = [
@@ -35,73 +58,385 @@ const quickTiles = [
 ];
 
 const productQuickChips = ["وش يميزه؟", "متى يوصل؟", "الضمان والاستبدال؟"];
+const CHAT_SESSION_ID_KEY = "chat_session_id";
+const CHAT_SESSION_TOKEN_KEY = "chat_token";
+
+function generateId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function getWsUrl() {
+  const baseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+  const base = baseUrl ? new URL(baseUrl) : new URL(window.location.origin);
+  base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
+  base.pathname = "/api/ws/chat";
+  base.search = "";
+  base.hash = "";
+  return base.toString();
+}
+
+function buildAddressMessage(payload: AddressFormPayload) {
+  return [
+    "بيانات الطلب:",
+    `الاسم: ${payload.customerName}`,
+    `الجوال: ${payload.customerPhone}`,
+    `العنوان: ${payload.addressRaw}`,
+    `المدينة: ${payload.city}`,
+    `طريقة الدفع: ${payload.paymentMethod}`,
+  ].join("\n");
+}
+
+function getDisplayConnectionLabel(status: string) {
+  if (status === "connected") return "متصل";
+  if (status === "reconnecting") return "يعيد الاتصال";
+  if (status === "connecting") return "جاري الاتصال";
+  return "غير متصل";
+}
+
+function AddressFormCard({
+  cities,
+  onSubmit,
+  disabled,
+}: {
+  cities: CityOption[];
+  onSubmit: (payload: AddressFormPayload) => void;
+  disabled: boolean;
+}) {
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [addressRaw, setAddressRaw] = useState("");
+  const [city, setCity] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("COD");
+
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background/80 p-3 space-y-3">
+      <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+        <Package className="w-3.5 h-3.5" />
+        <span>أرسل بيانات الطلب</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="الاسم" disabled={disabled} className="rounded-xl" />
+        <Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="رقم الجوال" disabled={disabled} className="rounded-xl" />
+      </div>
+      <Textarea value={addressRaw} onChange={(e) => setAddressRaw(e.target.value)} placeholder="العنوان الكامل" disabled={disabled} className="min-h-20 rounded-xl resize-none" />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          placeholder={cities.length ? "اختر أو اكتب المدينة" : "المدينة"}
+          list="chat-cities"
+          disabled={disabled}
+          className="rounded-xl"
+        />
+        <select
+          value={paymentMethod}
+          onChange={(e) => setPaymentMethod(e.target.value)}
+          disabled={disabled}
+          className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none"
+        >
+          <option value="COD">الدفع عند الاستلام</option>
+          <option value="Paymob">Paymob</option>
+        </select>
+      </div>
+      <datalist id="chat-cities">
+        {cities.map((option) => (
+          <option key={option.id} value={option.name} />
+        ))}
+      </datalist>
+      <Button
+        type="button"
+        className="w-full rounded-xl bg-[#CDEB63] text-[#1a2e05] hover:bg-[#bddf52]"
+        disabled={disabled || !customerName.trim() || !customerPhone.trim() || !addressRaw.trim() || !city.trim()}
+        onClick={() => onSubmit({ customerName, customerPhone, addressRaw, city, paymentMethod })}
+      >
+        إرسال البيانات
+      </Button>
+    </div>
+  );
+}
+
+function ActionButtons({
+  actions,
+  onSend,
+  onOpenProduct,
+  disabled,
+}: {
+  actions: ChatAction[];
+  onSend: (text: string) => void;
+  onOpenProduct: (productId: number) => void;
+  disabled: boolean;
+}) {
+  if (!actions.length) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {actions.map((action, idx) => {
+        if (action.type === "show_product") {
+          const productId = action.payload?.productId;
+          return (
+            <Button key={`${action.type}-${idx}`} type="button" variant="outline" size="sm" disabled={disabled || !productId} onClick={() => productId && onOpenProduct(productId)} className="rounded-full">
+              عرض المنتج
+            </Button>
+          );
+        }
+
+        if (action.type === "order_confirmation") {
+          return (
+            <Button key={`${action.type}-${idx}`} type="button" size="sm" disabled={disabled} onClick={() => onSend("confirm order")} className="rounded-full bg-[#CDEB63] text-[#1a2e05] hover:bg-[#bddf52]">
+              تأكيد الطلب
+            </Button>
+          );
+        }
+
+        return null;
+      })}
+    </div>
+  );
+}
 
 export default function ChatPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { chatProductContext, clearChatProductContext } = useFahd();
+  const [connectionStatus, setConnectionStatus] = useState("connecting");
+  const [cities, setCities] = useState<CityOption[]>([]);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [inputText, setInputText] = useState("");
   const [showWelcome, setShowWelcome] = useState(true);
-  const [conversationId, setConversationId] = useState<string | null>(null);
   const [autoMessageSent, setAutoMessageSent] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const heartbeatTimerRef = useRef<number | null>(null);
+  const sessionIdRef = useRef<string | null>(localStorage.getItem(CHAT_SESSION_ID_KEY));
+  const tokenRef = useRef<string | null>(localStorage.getItem(CHAT_SESSION_TOKEN_KEY));
+  const readyRef = useRef(false);
+  const shouldReconnectRef = useRef(true);
+  const typingMessageIdRef = useRef<string | null>(null);
+  const pendingMessagesRef = useRef<string[]>([]);
 
-  useEffect(() => {
-    const startChat = async () => {
-      try {
-        const res = await apiRequest("POST", "/api/chat/start", { userId: "user-123" });
-        const data: Conversation = await res.json();
-        setConversationId(data.id);
-      } catch (e) {
-        toast({ title: "ما قدرنا نبدأ المحادثة 😕", variant: "destructive" });
-      }
-    };
-    startChat();
+  const updateMessage = useCallback((messageId: string, updater: (message: ChatMsg) => ChatMsg) => {
+    setMessages((prev) => prev.map((message) => (message.id === messageId ? updater(message) : message)));
   }, []);
 
-  const sendMessageMutation = useMutation({
-    mutationFn: async (text: string) => {
-      if (!conversationId) throw new Error("No conversation ID");
-      const res = await apiRequest("POST", "/api/chat/message", {
-        conversationId,
-        message: text,
-        text,
-        sender: "user"
-      });
-      return res.json();
-    },
-    onSuccess: (data: { userMessage: Message, aiMessage: Message | null }) => {
-      if (data.aiMessage) {
-        const aiMsg: ChatMsg = {
-          id: data.aiMessage.id,
-          sender: "fahd",
-          text: data.aiMessage.text,
-          products: [],
-          actionButtons: []
-        };
-        setMessages(prev => [...prev, aiMsg]);
-      }
-    },
-    onError: () => {
-      toast({ title: "ما قدرنا نرسل الرسالة، جرّب مرة ثانية", variant: "destructive" });
+  const sendSocketData = useCallback((data: Record<string, unknown>) => {
+    const ws = wsRef.current;
+    const payload = JSON.stringify(data);
+
+    if (ws && ws.readyState === WebSocket.OPEN && readyRef.current) {
+      ws.send(payload);
+      return;
     }
-  });
+
+    pendingMessagesRef.current.push(payload);
+  }, []);
+
+  const flushPendingMessages = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || !readyRef.current) return;
+
+    while (pendingMessagesRef.current.length) {
+      ws.send(pendingMessagesRef.current.shift()!);
+    }
+  }, []);
+
+  const startHeartbeat = useCallback(() => {
+    if (heartbeatTimerRef.current) window.clearInterval(heartbeatTimerRef.current);
+    heartbeatTimerRef.current = window.setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN && readyRef.current) {
+        wsRef.current.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 25000);
+  }, []);
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatTimerRef.current) window.clearInterval(heartbeatTimerRef.current);
+    heartbeatTimerRef.current = null;
+  }, []);
+
+  const connect = useCallback(() => {
+    if (!shouldReconnectRef.current) return;
+
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+
+    readyRef.current = false;
+    setConnectionStatus((prev) => (prev === "connected" ? "reconnecting" : "connecting"));
+
+    const ws = new WebSocket(getWsUrl());
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      const sessionId = sessionIdRef.current;
+      const token = tokenRef.current;
+
+      if (sessionId && token) {
+        ws.send(JSON.stringify({ type: "auth", session_id: sessionId, token }));
+      } else {
+        ws.send(JSON.stringify({ type: "init" }));
+      }
+    };
+
+    ws.onmessage = (event) => {
+      let data: any;
+
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (data.type === "session_created") {
+        sessionIdRef.current = data.session_id;
+        tokenRef.current = data.token;
+        localStorage.setItem(CHAT_SESSION_ID_KEY, data.session_id);
+        localStorage.setItem(CHAT_SESSION_TOKEN_KEY, data.token);
+        readyRef.current = true;
+        setIsReady(true);
+        setConnectionStatus("connected");
+        startHeartbeat();
+        flushPendingMessages();
+        return;
+      }
+
+      if (data.type === "auth_ok") {
+        sessionIdRef.current = data.session_id;
+        readyRef.current = true;
+        setIsReady(true);
+        setConnectionStatus("connected");
+        startHeartbeat();
+        flushPendingMessages();
+        return;
+      }
+
+      if (data.type === "auth_error") {
+        sessionIdRef.current = null;
+        tokenRef.current = null;
+        localStorage.removeItem(CHAT_SESSION_ID_KEY);
+        localStorage.removeItem(CHAT_SESSION_TOKEN_KEY);
+        readyRef.current = false;
+        setIsReady(false);
+        ws.send(JSON.stringify({ type: "init" }));
+        return;
+      }
+
+      if (data.type === "ai_typing") {
+        setIsTyping(true);
+        if (!typingMessageIdRef.current) {
+          const messageId = generateId();
+          typingMessageIdRef.current = messageId;
+          setMessages((prev) => [...prev, { id: messageId, sender: "fahd", text: "" }]);
+        }
+        return;
+      }
+
+      if (data.type === "message_received") {
+        return;
+      }
+
+      if (data.type === "ai_chunk") {
+        if (!typingMessageIdRef.current) {
+          const messageId = generateId();
+          typingMessageIdRef.current = messageId;
+          setMessages((prev) => [...prev, { id: messageId, sender: "fahd", text: String(data.content || "") }]);
+          return;
+        }
+
+        updateMessage(typingMessageIdRef.current, (message) => ({
+          ...message,
+          text: String(data.content || ""),
+        }));
+        return;
+      }
+
+      if (data.type === "ai_done") {
+        const messageId = typingMessageIdRef.current;
+        if (messageId) {
+          updateMessage(messageId, (message) => ({
+            ...message,
+            text: message.text || "تم الرد.",
+            actions: Array.isArray(data.actions) ? data.actions : [],
+            meta: data.meta || null,
+          }));
+        }
+        typingMessageIdRef.current = null;
+        setIsTyping(false);
+        return;
+      }
+
+      if (data.type === "ai_error") {
+        const messageId = typingMessageIdRef.current;
+        if (messageId) {
+          updateMessage(messageId, (message) => ({
+            ...message,
+            text: "تعذر إكمال الرد الآن. جرّب مرة ثانية.",
+          }));
+        }
+        typingMessageIdRef.current = null;
+        setIsTyping(false);
+        toast({ title: "صار خطأ في الرد", description: String(data.error || "تعذر التواصل مع المساعد"), variant: "destructive" });
+        return;
+      }
+
+      if (data.type === "error") {
+        toast({ title: "خطأ في المحادثة", description: String(data.error || "حدث خطأ غير متوقع"), variant: "destructive" });
+      }
+    };
+
+    ws.onerror = () => {
+      setConnectionStatus("reconnecting");
+    };
+
+    ws.onclose = () => {
+      readyRef.current = false;
+      setIsReady(false);
+      stopHeartbeat();
+      if (!shouldReconnectRef.current) {
+        setConnectionStatus("disconnected");
+        return;
+      }
+
+      setConnectionStatus("reconnecting");
+      reconnectTimerRef.current = window.setTimeout(() => {
+        connect();
+      }, 1000);
+    };
+  }, [flushPendingMessages, startHeartbeat, stopHeartbeat, toast, updateMessage]);
 
   useEffect(() => {
-    if (chatProductContext && conversationId && !autoMessageSent) {
-      setAutoMessageSent(true);
-      setShowWelcome(false);
-      const text = chatProductContext.autoMessage;
-      const tempId = Math.random().toString();
-      setMessages(prev => [...prev, { id: tempId, sender: "user", text }]);
-      sendMessageMutation.mutate(text);
-    }
-  }, [chatProductContext, conversationId, autoMessageSent]);
+    connect();
+
+    return () => {
+      shouldReconnectRef.current = false;
+      readyRef.current = false;
+      stopHeartbeat();
+      if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+      wsRef.current?.close();
+    };
+  }, [connect, stopHeartbeat]);
+
+  useEffect(() => {
+    const loadCities = async () => {
+      try {
+        const res = await apiRequest("GET", "/api/cities");
+        const payload = await res.json();
+        const list = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.items) ? payload.items : [];
+        setCities(list);
+      } catch {
+        setCities([]);
+      }
+    };
+
+    loadCities();
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sendMessageMutation.isPending]);
+  }, [messages, isTyping]);
 
   useEffect(() => {
     return () => {
@@ -109,30 +444,43 @@ export default function ChatPage() {
     };
   }, []);
 
-  const handleTileClick = (tile: typeof quickTiles[0]) => {
+  useEffect(() => {
+    if (!chatProductContext || autoMessageSent || !isReady) return;
+
+    setAutoMessageSent(true);
     setShowWelcome(false);
-    handleSend(tile.sendText);
-  };
+    const text = chatProductContext.autoMessage;
+    const tempId = generateId();
+    setMessages((prev) => [...prev, { id: tempId, sender: "user", text }]);
+    sendSocketData({ type: "message", content: text });
+  }, [chatProductContext, autoMessageSent, isReady, sendSocketData]);
 
-  const handleSend = (textOverride?: string) => {
-    const text = textOverride || inputText.trim();
-    if (!text || !conversationId) return;
+  const sendMessage = useCallback((textOverride?: string) => {
+    const text = (textOverride || inputText).trim();
+    if (!text || !isReady || isTyping) return;
 
-    const tempId = Math.random().toString();
-    setMessages(prev => [...prev, { id: tempId, sender: "user", text }]);
+    const tempId = generateId();
+    setMessages((prev) => [...prev, { id: tempId, sender: "user", text }]);
     setInputText("");
     setShowWelcome(false);
+    sendSocketData({ type: "message", content: text });
+  }, [inputText, isReady, isTyping, sendSocketData]);
 
-    sendMessageMutation.mutate(text);
+  const handleTileClick = (tile: typeof quickTiles[0]) => {
+    setShowWelcome(false);
+    sendMessage(tile.sendText);
   };
 
   const handleQuickChipClick = (chip: string) => {
-    handleSend(chip);
+    sendMessage(chip);
   };
 
-  const isTyping = sendMessageMutation.isPending;
+  const handleAddressSubmit = (payload: AddressFormPayload) => {
+    sendMessage(buildAddressMessage(payload));
+  };
 
   const hasProductContext = !!chatProductContext;
+  const isConnected = connectionStatus === "connected" && isReady;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -149,9 +497,9 @@ export default function ChatPage() {
             <p className="text-[11px] text-muted-foreground">مساعدك الذكي</p>
           </div>
           <div className="ms-auto">
-            <div className="flex items-center gap-1 text-[10px] text-[#8ab525]">
-              <Sparkles className="w-3 h-3" />
-              <span>متصل</span>
+            <div className={`flex items-center gap-1 text-[10px] ${isConnected ? "text-[#8ab525]" : "text-muted-foreground"}`}>
+              {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+              <span>{getDisplayConnectionLabel(connectionStatus)}</span>
             </div>
           </div>
         </div>
@@ -210,6 +558,20 @@ export default function ChatPage() {
                     >
                       {msg.text}
                     </div>
+                    {msg.sender === "fahd" && (
+                      <ActionButtons
+                        actions={msg.actions || []}
+                        disabled={!isConnected || isTyping}
+                        onSend={sendMessage}
+                        onOpenProduct={(productId) => {
+                          if (!productId) return;
+                          navigate(`/product/${productId}`);
+                        }}
+                      />
+                    )}
+                    {msg.sender === "fahd" && msg.actions?.some((action) => action.type === "address_form") && (
+                      <AddressFormCard cities={cities} disabled={!isConnected || isTyping} onSubmit={handleAddressSubmit} />
+                    )}
                   </div>
                 </div>
               </div>
@@ -235,25 +597,25 @@ export default function ChatPage() {
       <div className="sticky bottom-0 bg-background/90 backdrop-blur-xl border-t border-border/50 p-3">
         <div className="max-w-2xl mx-auto space-y-2">
           <div className="flex gap-2">
-            <Input
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="اكتب لفهد هنا..."
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              disabled={!conversationId || isTyping}
-              className="flex-1 rounded-full bg-card border-card-border min-h-[44px]"
-              data-testid="input-chat-message"
-            />
-            <Button
-              size="icon"
-              onClick={() => handleSend()}
-              disabled={!conversationId || isTyping}
-              className="rounded-full bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] shrink-0 min-h-[44px] min-w-[44px]"
-              data-testid="button-send-message"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
+              <Input
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="اكتب لفهد هنا..."
+                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                disabled={!isConnected || isTyping}
+                className="flex-1 rounded-full bg-card border-card-border min-h-[44px]"
+                data-testid="input-chat-message"
+              />
+              <Button
+                size="icon"
+                onClick={() => sendMessage()}
+                disabled={!isConnected || isTyping}
+                className="rounded-full bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] shrink-0 min-h-[44px] min-w-[44px]"
+                data-testid="button-send-message"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
           {hasProductContext && (
             <div className="flex items-center gap-2 overflow-x-auto pt-1 scrollbar-hide">
               {chatProductContext.image && (
