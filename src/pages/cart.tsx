@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useFahd } from "@/lib/fahd-store";
 import { formatPrice } from "@/lib/mockData";
@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { getUnitPricingForQuantity } from "@/lib/pricing";
 import {
   ArrowRight,
   Minus,
@@ -23,6 +24,8 @@ import {
 } from "lucide-react";
 
 type CheckoutStep = "cart" | "info" | "payment" | "success";
+
+type CityOption = { id: number; name: string; isActive?: boolean; sortOrder?: number };
 
 function normalizeCoupon(
   payload: any,
@@ -70,6 +73,7 @@ export default function CartPage() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [cityId, setCityId] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("");
   const [orderResult, setOrderResult] = useState<{
     orderNumber: string;
@@ -78,6 +82,12 @@ export default function CartPage() {
   const subtotal = getCartTotal();
   const discount = getCartDiscount();
   const total = subtotal - discount;
+
+  const { data: cities = [], isLoading: citiesLoading } = useQuery<CityOption[]>({
+    queryKey: ["/api/cities"],
+  });
+
+  const activeCities = cities.filter((city) => city.isActive !== false).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
   const couponMutation = useMutation({
     mutationFn: async (code: string) => {
@@ -138,7 +148,8 @@ export default function CartPage() {
     if (
       !customerName.trim() ||
       !customerPhone.trim() ||
-      !customerAddress.trim()
+      !customerAddress.trim() ||
+      !cityId
     )
       return;
     setStep("payment");
@@ -156,7 +167,7 @@ export default function CartPage() {
       customerPhone,
       customerAddress,
       addressRaw: customerAddress,
-      addressCity: customerAddress.split(",")[0]?.trim() || "",
+      cityId,
       customerEmail: "",
       paymentMethod,
       couponCode: appliedCoupon?.code,
@@ -270,6 +281,11 @@ export default function CartPage() {
             ) : (
               <div className="space-y-3">
                 {cartItems.map((item, idx) => (
+                  (() => {
+                    const pricing = getUnitPricingForQuantity(item.product, item.quantity, item.variantPrice);
+                    const itemTotal = pricing.unitPrice * item.quantity;
+
+                    return (
                   <Card
                     key={`${item.product.id}-${item.variantId ?? item.color}-${item.size}`}
                     className="rounded-xl p-3 border-card-border animate-slide-in-right"
@@ -328,15 +344,17 @@ export default function CartPage() {
                               {item.variantLabel}
                             </Badge>
                           )}
+                          {pricing.activeTier && (
+                            <Badge
+                              className="text-[10px] bg-[#CDEB63]/15 text-[#5f7f13] border-0 no-default-hover-elevate"
+                            >
+                              سعر {pricing.activeTier.label || `${pricing.activeTier.qty}+`}
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
                           <span className="font-bold text-sm">
-                            {formatPrice(
-                              ((item.variantPrice ??
-                                (item.product as any).pricing?.price ??
-                                (item.product as any).price ??
-                                0) * item.quantity),
-                            )}
+                            {formatPrice(itemTotal)}
                           </span>
                           <div className="flex items-center gap-2">
                             <Button
@@ -386,6 +404,8 @@ export default function CartPage() {
                       </div>
                     </div>
                   </Card>
+                    );
+                  })()
                 ))}
 
                 <Card
@@ -491,6 +511,25 @@ export default function CartPage() {
               </div>
               <div>
                 <label className="text-sm font-semibold mb-1.5 block">
+                  المدينة
+                </label>
+                <select
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 min-h-[44px]"
+                  value={cityId ?? ""}
+                  onChange={(e) => setCityId(e.target.value ? Number(e.target.value) : null)}
+                  data-testid="select-checkout-city"
+                  disabled={citiesLoading}
+                >
+                  <option value="">اختر المدينة</option>
+                  {activeCities.map((city) => (
+                    <option key={city.id} value={city.id}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-semibold mb-1.5 block">
                   عنوان التوصيل
                 </label>
                 <Input
@@ -582,14 +621,15 @@ export default function CartPage() {
                     ? handleSubmitInfo
                     : handleConfirmOrder
               }
-              disabled={
-                (step === "info" &&
-                  (!customerName.trim() ||
-                    !customerPhone.trim() ||
-                    !customerAddress.trim())) ||
-                (step === "payment" && !paymentMethod) ||
-                orderMutation.isPending
-              }
+                disabled={
+                  (step === "info" &&
+                    (!customerName.trim() ||
+                      !customerPhone.trim() ||
+                      !customerAddress.trim() ||
+                      !cityId)) ||
+                  (step === "payment" && !paymentMethod) ||
+                  orderMutation.isPending
+                }
               data-testid="button-checkout"
             >
               {orderMutation.isPending ? (

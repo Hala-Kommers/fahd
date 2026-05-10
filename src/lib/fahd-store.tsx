@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import type { Product } from "@shared/schema";
+import { getUnitPricingForQuantity } from "@/lib/pricing";
 
 export interface ChatMessage {
   id: string;
@@ -62,7 +63,7 @@ interface FahdStore {
   appliedCoupon: { code: string; type: "percentage" | "fixed"; value: number } | null;
   chatProductContext: ChatProductContext | null;
 
-  openOrderSheet: (product: Product) => void;
+  openOrderSheet: (product: Product, options?: { quantity?: number }) => void;
   closeOrderSheet: () => void;
   setSelectedColor: (color: string) => void;
   setSelectedSize: (size: string) => void;
@@ -147,7 +148,7 @@ export function FahdProvider({ children }: { children: ReactNode }) {
     return `${item.product.id}::base::${item.color || ""}::${item.size || ""}`;
   }, []);
 
-  const openOrderSheet = useCallback((product: Product) => {
+  const openOrderSheet = useCallback((product: Product, options?: { quantity?: number }) => {
     setOrderProduct(product);
     const p = product as any;
     const productColors: { name: string }[] = p.variants?.colors
@@ -157,7 +158,7 @@ export function FahdProvider({ children }: { children: ReactNode }) {
 
     setSelectedColor(productColors[0]?.name || "");
     setSelectedSize(productSizes[0] || "");
-    setQuantity(1);
+    setQuantity(Math.max(1, options?.quantity ?? 1));
     setOrderStep("variant");
     setCustomerName("");
     setCustomerPhone("");
@@ -253,8 +254,8 @@ export function FahdProvider({ children }: { children: ReactNode }) {
 
   const getCartTotal = useCallback(() => {
     return cartItems.reduce((sum, item) => {
-      const p = item.product as any;
-      const price = item.variantPrice ?? p.pricing?.price ?? p.price ?? 0;
+      const { unitPrice } = getUnitPricingForQuantity(item.product, item.quantity, item.variantPrice);
+      const price = unitPrice;
       return sum + price * item.quantity;
     }, 0);
   }, [cartItems]);
@@ -264,8 +265,8 @@ export function FahdProvider({ children }: { children: ReactNode }) {
     const couponValue = Number(appliedCoupon.value);
     if (Number.isNaN(couponValue)) return 0;
     const total = cartItems.reduce((sum, item) => {
-      const p = item.product as any;
-      const price = item.variantPrice ?? p.pricing?.price ?? p.price ?? 0;
+      const { unitPrice } = getUnitPricingForQuantity(item.product, item.quantity, item.variantPrice);
+      const price = unitPrice;
       return sum + price * item.quantity;
     }, 0);
     if (appliedCoupon.type === "percentage") {

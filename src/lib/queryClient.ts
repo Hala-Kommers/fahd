@@ -81,6 +81,9 @@ function normalizeApiData(path: string, payload: unknown) {
   if (path === "/api/categories") {
     return data?.items ?? data?.data ?? payload;
   }
+  if (path === "/api/cities") {
+    return data?.items ?? data?.data ?? payload;
+  }
   if (path.startsWith("/api/products/") || path.startsWith("/api/admin/products/")) {
     return data?.item ?? data?.data ?? data?.product ?? payload;
   }

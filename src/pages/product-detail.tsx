@@ -129,16 +129,23 @@ export default function ProductDetail() {
     );
   }
   const pricingTiers: { qty: number; label?: string; originalPrice: number; finalPrice: number }[] = product.pricingTiers ?? [];
+  const selectedVariantPriceOverride = selectedVariant?.priceOverride && selectedVariant.priceOverride > 0 ? selectedVariant.priceOverride : null;
+  const hasVariantPriceOverride = selectedVariantPriceOverride !== null;
   const hasTiers = pricingTiers.length > 0;
-  const activeTier = hasTiers ? pricingTiers[selectedTierIdx] : null;
+  const showTierPricing = hasTiers && !hasVariantPriceOverride;
+  const activeTier = showTierPricing ? pricingTiers[selectedTierIdx] : null;
   const selectedDisplayImage = selectedVariant?.image || selectedImage;
-  const displayPrice = selectedVariant?.priceOverride > 0
-    ? selectedVariant.priceOverride
+  const displayPrice = hasVariantPriceOverride
+    ? selectedVariantPriceOverride
     : (activeTier ? activeTier.finalPrice : (product?.pricing?.price ?? product?.price ?? 0));
   const rawOldPrice = activeTier
     ? activeTier.originalPrice
     : (product?.pricing?.compareAt ?? product?.compareAt ?? product?.oldPrice ?? null);
   const displayOldPrice = rawOldPrice && rawOldPrice > displayPrice ? rawOldPrice : null;
+  const orderQuantity = hasVariantPriceOverride
+    ? quantity
+    : (activeTier?.qty ?? quantity);
+  const totalPrice = displayPrice * orderQuantity;
   const displayStock = selectedVariant?.stock ?? (product.stockTotal ?? product.inventory?.stockTotal ?? product.stock ?? 0);
   const displayRating = product.rating ?? 0;
   const displayFaq: { question: string; answer: string }[] = product.faq ?? [];
@@ -243,7 +250,7 @@ export default function ProductDetail() {
               <span className="text-2xl font-bold text-foreground" data-testid="text-product-price">
                 {formatPrice(displayPrice)}
               </span>
-              {selectedVariant?.priceOverride > 0 && (
+              {hasVariantPriceOverride && (
                 <Badge className="bg-[#CDEB63]/15 text-[#5f7f13] border-0 text-xs no-default-hover-elevate">
                   لهذا SKU سعر خاص
                 </Badge>
@@ -375,7 +382,47 @@ export default function ProductDetail() {
             </div>
           )}
 
-          {hasTiers ? (
+          {hasVariantPriceOverride ? (
+            <div>
+              <h3 className="text-sm font-semibold mb-2">الكمية</h3>
+              <div className="rounded-2xl border border-card-border bg-card p-3 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-sm text-muted-foreground">اختر الكمية لهذا الخيار</p>
+                  <Badge variant="secondary" className="text-[11px]">
+                    {formatPrice(totalPrice)}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    disabled={quantity <= 1}
+                    className="min-h-[44px] min-w-[44px] rounded-xl"
+                    data-testid="button-qty-minus"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-2xl font-bold tabular-nums" data-testid="text-quantity">
+                      {quantity}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">قطعة</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setQuantity(Math.min(displayStock || 99, quantity + 1))}
+                    disabled={quantity >= (displayStock || 99)}
+                    className="min-h-[44px] min-w-[44px] rounded-xl"
+                    data-testid="button-qty-plus"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : showTierPricing ? (
             <div>
               <h3 className="text-sm font-semibold mb-2">اختر الكمية</h3>
               <div className="flex gap-2 flex-wrap">
@@ -491,29 +538,29 @@ export default function ProductDetail() {
                 variant="outline"
                 size="icon"
                 className="shrink-0 rounded-xl min-h-[48px] min-w-[48px]"
-                onClick={() => {
-              if (variantOptionNames.length > 0 && !selectedVariant) {
-                toast({ title: "اختر الخيارات أولاً", variant: "destructive" });
-                return;
-              }
+              onClick={() => {
+                if (variantOptionNames.length > 0 && !selectedVariant) {
+                  toast({ title: "اختر الخيارات أولاً", variant: "destructive" });
+                  return;
+                }
 
-              const color = colors[selectedColor]?.name || "";
-              const size = sizes[selectedSize] || "";
-              addToCart(
-                product,
-                quantity,
-                color,
-                size,
-                selectedVariant?.id ?? null,
-                selectedVariant?.attributes,
-                variantOptionNames.length > 0 ? Object.values(selectedVariant?.attributes || {}).join(" - ") : undefined,
-                selectedVariant?.priceOverride || undefined,
-              );
-              toast({
-                title: "انضاف للسلة ✅",
-                description: `${product.title} (${quantity})`,
-              });
-            }}
+                const color = colors[selectedColor]?.name || "";
+                const size = sizes[selectedSize] || "";
+                addToCart(
+                  product,
+                  orderQuantity,
+                  color,
+                  size,
+                  selectedVariant?.id ?? null,
+                  selectedVariant?.attributes,
+                  variantOptionNames.length > 0 ? Object.values(selectedVariant?.attributes || {}).join(" - ") : undefined,
+                  selectedVariantPriceOverride || undefined,
+                );
+                toast({
+                  title: "انضاف للسلة ✅",
+                  description: `${product.title} (${orderQuantity})`,
+                });
+              }}
             data-testid="button-add-cart"
           >
             <ShoppingCart className="w-5 h-5" />
@@ -526,21 +573,21 @@ export default function ProductDetail() {
                 return;
               }
 
-              const orderProduct = hasTiers
-                ? { ...product, pricing: { ...product.pricing, price: activeTier!.finalPrice, compareAt: activeTier!.originalPrice } }
+              const orderProduct = showTierPricing && activeTier
+                ? { ...product, pricing: { ...product.pricing, price: activeTier.finalPrice, compareAt: activeTier.originalPrice } }
                 : product;
 
               openOrderSheet({
                 ...orderProduct,
                 selectedVariantId: selectedVariant?.id ?? null,
                 selectedVariantLabel: variantOptionNames.length > 0 ? Object.values(selectedVariant?.attributes || {}).join(" - ") : undefined,
-                selectedVariantPrice: selectedVariant?.priceOverride || undefined,
+                selectedVariantPrice: selectedVariantPriceOverride || undefined,
                 selectedVariantStock: selectedVariant?.stock || undefined,
-              } as any);
+              } as any, { quantity: orderQuantity });
             }}
               data-testid="button-order-now"
             >
-            اطلب الآن - {formatPrice(displayPrice * quantity)}
+            اطلب الآن - {formatPrice(totalPrice)}
             </Button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ import { useLocation } from "wouter";
 function generateId() {
   return Math.random().toString(36).substring(2, 9);
 }
+
+type CityOption = { id: number; name: string; isActive?: boolean; sortOrder?: number };
 
 export default function OrderSheet() {
   const store = useFahd();
@@ -42,6 +44,13 @@ export default function OrderSheet() {
   const [inputText, setInputText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [infoStep, setInfoStep] = useState<"name" | "phone">("name");
+  const [cityId, setCityId] = useState<number | null>(null);
+
+  const { data: cities = [], isLoading: citiesLoading } = useQuery<CityOption[]>({
+    queryKey: ["/api/cities"],
+  });
+
+  const activeCities = cities.filter((city) => city.isActive !== false).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
   const orderMutation = useMutation({
     mutationFn: async (data: {
@@ -50,13 +59,13 @@ export default function OrderSheet() {
       variantId?: string | number | null;
       quantity: number;
       items: { productId: string | number; variantId?: string | number | null; qty: number }[];
-      customerName: string;
-      customerPhone: string;
-      customerAddress: string;
-      addressRaw: string;
-      addressCity: string;
-      paymentMethod: string;
-    }) => {
+        customerName: string;
+        customerPhone: string;
+        customerAddress: string;
+        addressRaw: string;
+        cityId: number | null;
+        paymentMethod: string;
+      }) => {
       const res = await apiRequest("POST", "/api/orders", data);
       return res.json();
     },
@@ -65,6 +74,12 @@ export default function OrderSheet() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [orderMessages]);
+
+  useEffect(() => {
+    if (orderSheetOpen) {
+      setCityId(activeCities[0]?.id ?? null);
+    }
+  }, [orderSheetOpen, activeCities]);
 
   if (!orderProduct) return null;
 
@@ -156,11 +171,11 @@ export default function OrderSheet() {
   const handleSend = () => {
     if (!inputText.trim()) return;
     const text = inputText.trim();
-    setInputText("");
-
-    addOrderMessage({ id: generateId(), sender: "user", text });
 
     if (orderStep === "info") {
+      setInputText("");
+      addOrderMessage({ id: generateId(), sender: "user", text });
+
       if (infoStep === "name") {
         setCustomerName(text);
         setInfoStep("phone");
@@ -183,6 +198,17 @@ export default function OrderSheet() {
         }, 500);
       }
     } else if (orderStep === "address") {
+      if (!cityId) {
+        addOrderMessage({
+          id: generateId(),
+          sender: "fahd",
+          text: "اختر المدينة أولاً عشان أكمّل العنوان.",
+        });
+        return;
+      }
+
+      setInputText("");
+      addOrderMessage({ id: generateId(), sender: "user", text });
       setCustomerAddress(text);
       setTimeout(() => {
         const parsed = parseAddress(text);
@@ -206,6 +232,8 @@ export default function OrderSheet() {
         }, 800);
       }, 500);
     } else {
+      setInputText("");
+      addOrderMessage({ id: generateId(), sender: "user", text });
       setTimeout(() => {
         const faq = productFaq.find(
           (f) => text.includes("يميز") || text.includes("يوصل") || text.includes("ضمان")
@@ -220,7 +248,16 @@ export default function OrderSheet() {
   };
 
   const handleConfirmOrder = () => {
-      orderMutation.mutate(
+    if (!cityId) {
+      addOrderMessage({
+        id: generateId(),
+        sender: "fahd",
+        text: "اختر المدينة أولاً قبل تأكيد الطلب.",
+      });
+      return;
+    }
+
+    orderMutation.mutate(
       {
         productId: orderProduct.id,
         variantId: p.selectedVariantId ?? null,
@@ -231,7 +268,7 @@ export default function OrderSheet() {
         customerPhone: customerPhone,
         customerAddress: store.customerAddress,
         addressRaw: store.customerAddress,
-        addressCity: store.customerAddress.split(",")[0]?.trim() || "",
+        cityId,
         paymentMethod: store.paymentMethod,
       },
       {
@@ -324,6 +361,23 @@ export default function OrderSheet() {
 
         {orderStep !== "success" && (
           <div className="border-t border-border/50 p-3 space-y-2">
+            {orderStep === "address" && (
+              <div>
+                <label className="text-sm font-semibold mb-1.5 block">المدينة</label>
+                <select
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 min-h-[44px]"
+                  value={cityId ?? ""}
+                  onChange={(e) => setCityId(e.target.value ? Number(e.target.value) : null)}
+                  disabled={citiesLoading}
+                  data-testid="select-order-city"
+                >
+                  <option value="">اختر المدينة</option>
+                  {activeCities.map((city) => (
+                    <option key={city.id} value={city.id}>{city.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {orderStep === "variant" && productFaq.length > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                 {productFaq.map((faq) => (
