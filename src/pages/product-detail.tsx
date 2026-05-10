@@ -13,7 +13,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Star, Minus, Plus, Truck, CreditCard, ShieldCheck, ArrowRight, ShoppingCart } from "lucide-react";
+import { Star, Minus, Plus, Truck, CreditCard, ShieldCheck, ArrowRight, ShoppingCart, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function ProductDetail() {
@@ -195,6 +195,11 @@ export default function ProductDetail() {
     navigate("/chat");
   };
 
+  const copyProductId = async () => {
+    await navigator.clipboard.writeText(String(product.id));
+    toast({ title: "تم نسخ رقم المنتج" });
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24" dir="rtl">
       <Header />
@@ -247,6 +252,17 @@ export default function ProductDetail() {
 
         <div className="px-4 space-y-4 animate-slide-up-spring">
           <div>
+            <div className="mb-2">
+              <button
+                type="button"
+                onClick={copyProductId}
+                className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                data-testid="button-copy-product-id"
+              >
+                <Copy className="w-3 h-3" />
+                رقم المنتج: {product.id}
+              </button>
+            </div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <div className="flex items-center gap-1">
                 <Star className="w-4 h-4 fill-[#CDEB63] text-[#CDEB63]" />

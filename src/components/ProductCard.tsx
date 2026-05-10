@@ -1,8 +1,9 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, ShoppingCart } from "lucide-react";
+import { Star, ShoppingCart, Copy } from "lucide-react";
 import type { Product } from "@shared/schema";
+import type { MouseEvent } from "react";
 import { formatPrice } from "@/lib/mockData";
 import { useFahd } from "@/lib/fahd-store";
 import { useLocation } from "wouter";
@@ -29,6 +30,12 @@ export default function ProductCard({ product }: ProductCardProps) {
     || (p.variants ?? []).find((v: any) => v.attributes?.size)?.attributes?.size
     || "";
 
+  const copyProductId = async (e: MouseEvent) => {
+    e.stopPropagation();
+    await navigator.clipboard.writeText(String(product.id));
+    toast({ title: "تم نسخ رقم المنتج" });
+  };
+
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (hasVariants) {
@@ -48,9 +55,14 @@ export default function ProductCard({ product }: ProductCardProps) {
       className="overflow-visible rounded-[20px] border-card-border p-0 group transition-all duration-300 hover:-translate-y-1 hover:shadow-lg active:scale-[0.98]"
       data-testid={`card-product-${product.id}`}
     >
-      <button
+      <div
         className="w-full cursor-pointer text-right"
         onClick={() => navigate(`/product/${product.id}`)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") navigate(`/product/${product.id}`);
+        }}
         data-testid={`link-product-${product.id}`}
       >
         <div className="relative overflow-hidden rounded-t-[20px] bg-muted/50 aspect-square">
@@ -77,6 +89,15 @@ export default function ProductCard({ product }: ProductCardProps) {
               {product.category}
             </Badge>
           )}
+          <button
+            type="button"
+            onClick={copyProductId}
+            className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-[11px] font-semibold text-foreground shadow-sm backdrop-blur border border-border/60"
+            data-testid={`button-copy-product-id-${product.id}`}
+          >
+            <Copy className="w-3 h-3" />
+            ID {product.id}
+          </button>
         </div>
 
         <div className="p-3 pb-2">
@@ -97,7 +118,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             )}
           </div>
         </div>
-      </button>
+      </div>
 
       <div className="px-3 pb-3 flex gap-2">
           <Button
