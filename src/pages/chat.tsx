@@ -1,5 +1,5 @@
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, Fragment, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -60,9 +60,152 @@ const quickTiles = [
 const productQuickChips = ["وش يميزه؟", "متى يوصل؟", "الضمان والاستبدال؟"];
 const CHAT_SESSION_ID_KEY = "chat_session_id";
 const CHAT_SESSION_TOKEN_KEY = "chat_token";
+const CHAT_MESSAGES_KEY_PREFIX = "chat_messages:";
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function getChatMessagesKey(sessionId: string) {
+  return `${CHAT_MESSAGES_KEY_PREFIX}${sessionId}`;
+}
+
+function readStoredMessages(sessionId: string): ChatMsg[] {
+  try {
+    const raw = localStorage.getItem(getChatMessagesKey(sessionId));
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((message): message is ChatMsg => {
+      return message
+        && typeof message.id === "string"
+        && (message.sender === "user" || message.sender === "fahd")
+        && typeof message.text === "string";
+    });
+  } catch {
+    return [];
+  }
+}
+
+function normalizeText(text: string) {
+  return text.replace(/\r\n/g, "\n");
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
+  let lastIndex = 0;
+
+  for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+
+    const token = match[0];
+    if (token.startsWith("**")) {
+      nodes.push(<strong key={`${match.index}-strong`}>{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith("`")) {
+      nodes.push(<code key={`${match.index}-code`} className="rounded bg-muted px-1 py-0.5 font-mono text-[0.9em]">{token.slice(1, -1)}</code>);
+    } else if (token.startsWith("*")) {
+      nodes.push(<em key={`${match.index}-em`}>{token.slice(1, -1)}</em>);
+    } else {
+      const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (linkMatch) {
+        nodes.push(
+          <a key={`${match.index}-link`} href={linkMatch[2]} target="_blank" rel="noreferrer" className="underline underline-offset-2 text-primary break-words">
+            {linkMatch[1]}
+          </a>
+        );
+      } else {
+        nodes.push(token);
+      }
+    }
+
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return nodes;
+}
+
+function MarkdownMessage({ text }: { text: string }) {
+  const lines = normalizeText(text).split("\n");
+  const blocks: ReactNode[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+
+    const unorderedMatch = /^\s*[*-]\s+(.+)$/.exec(line);
+    if (unorderedMatch) {
+      const items: string[] = [];
+      while (index < lines.length) {
+        const itemMatch = /^\s*[*-]\s+(.+)$/.exec(lines[index]);
+        if (!itemMatch) break;
+        items.push(itemMatch[1]);
+        index += 1;
+      }
+
+      blocks.push(
+        <ul key={`ul-${index}`} className="list-disc space-y-1 ps-5">
+          {items.map((item, itemIndex) => (
+            <li key={`${index}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    const orderedMatch = /^\s*(\d+)\.\s+(.+)$/.exec(line);
+    if (orderedMatch) {
+      const items: string[] = [];
+      while (index < lines.length) {
+        const itemMatch = /^\s*(\d+)\.\s+(.+)$/.exec(lines[index]);
+        if (!itemMatch) break;
+        items.push(itemMatch[2]);
+        index += 1;
+      }
+
+      blocks.push(
+        <ol key={`ol-${index}`} className="list-decimal space-y-1 ps-5">
+          {items.map((item, itemIndex) => (
+            <li key={`${index}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+
+    const paragraphLines: string[] = [line.trim()];
+    index += 1;
+
+    while (index < lines.length && lines[index].trim() && !/^\s*[*-]\s+/.test(lines[index]) && !/^\s*\d+\.\s+/.test(lines[index])) {
+      paragraphLines.push(lines[index].trim());
+      index += 1;
+    }
+
+    blocks.push(
+      <p key={`p-${index}`} className="whitespace-normal">
+        {paragraphLines.map((paragraphLine, paragraphIndex) => (
+          <Fragment key={`${index}-${paragraphIndex}`}>
+            {paragraphIndex > 0 && <br />}
+            {renderInlineMarkdown(paragraphLine)}
+          </Fragment>
+        ))}
+      </p>
+    );
+  }
+
+  return <div className="space-y-2">{blocks}</div>;
 }
 
 function getWsUrl() {
@@ -201,6 +344,7 @@ export default function ChatPage() {
   const [connectionStatus, setConnectionStatus] = useState("connecting");
   const [cities, setCities] = useState<CityOption[]>([]);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(localStorage.getItem(CHAT_SESSION_ID_KEY));
   const [inputText, setInputText] = useState("");
   const [showWelcome, setShowWelcome] = useState(true);
   const [autoMessageSent, setAutoMessageSent] = useState(false);
@@ -212,6 +356,8 @@ export default function ChatPage() {
   const heartbeatTimerRef = useRef<number | null>(null);
   const sessionIdRef = useRef<string | null>(localStorage.getItem(CHAT_SESSION_ID_KEY));
   const tokenRef = useRef<string | null>(localStorage.getItem(CHAT_SESSION_TOKEN_KEY));
+  const sessionHydratedRef = useRef(false);
+  const sessionHydrationTimerRef = useRef<number | null>(null);
   const readyRef = useRef(false);
   const shouldReconnectRef = useRef(true);
   const typingMessageIdRef = useRef<string | null>(null);
@@ -293,6 +439,7 @@ export default function ChatPage() {
       if (data.type === "session_created") {
         sessionIdRef.current = data.session_id;
         tokenRef.current = data.token;
+        setSessionId(data.session_id);
         localStorage.setItem(CHAT_SESSION_ID_KEY, data.session_id);
         localStorage.setItem(CHAT_SESSION_TOKEN_KEY, data.token);
         readyRef.current = true;
@@ -305,6 +452,7 @@ export default function ChatPage() {
 
       if (data.type === "auth_ok") {
         sessionIdRef.current = data.session_id;
+        setSessionId(data.session_id);
         readyRef.current = true;
         setIsReady(true);
         setConnectionStatus("connected");
@@ -316,10 +464,14 @@ export default function ChatPage() {
       if (data.type === "auth_error") {
         sessionIdRef.current = null;
         tokenRef.current = null;
+        setSessionId(null);
         localStorage.removeItem(CHAT_SESSION_ID_KEY);
         localStorage.removeItem(CHAT_SESSION_TOKEN_KEY);
         readyRef.current = false;
         setIsReady(false);
+        setMessages([]);
+        setShowWelcome(true);
+        setAutoMessageSent(false);
         ws.send(JSON.stringify({ type: "init" }));
         return;
       }
@@ -435,17 +587,46 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
+    if (sessionHydrationTimerRef.current) {
+      window.clearTimeout(sessionHydrationTimerRef.current);
+      sessionHydrationTimerRef.current = null;
+    }
+
+    sessionHydratedRef.current = false;
+
+    if (!sessionId) {
+      setMessages([]);
+      setShowWelcome(true);
+      return;
+    }
+
+    const storedMessages = readStoredMessages(sessionId);
+    setMessages(storedMessages);
+    setShowWelcome(storedMessages.length === 0);
+    sessionHydrationTimerRef.current = window.setTimeout(() => {
+      sessionHydratedRef.current = true;
+      sessionHydrationTimerRef.current = null;
+    }, 0);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId || !sessionHydratedRef.current) return;
+    localStorage.setItem(getChatMessagesKey(sessionId), JSON.stringify(messages));
+  }, [messages, sessionId]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
   useEffect(() => {
     return () => {
       clearChatProductContext();
+      if (sessionHydrationTimerRef.current) window.clearTimeout(sessionHydrationTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
-    if (!chatProductContext || autoMessageSent || !isReady) return;
+    if (!chatProductContext || autoMessageSent || !isReady || messages.length > 0) return;
 
     setAutoMessageSent(true);
     setShowWelcome(false);
@@ -453,7 +634,7 @@ export default function ChatPage() {
     const tempId = generateId();
     setMessages((prev) => [...prev, { id: tempId, sender: "user", text }]);
     sendSocketData({ type: "message", content: text });
-  }, [chatProductContext, autoMessageSent, isReady, sendSocketData]);
+  }, [chatProductContext, autoMessageSent, isReady, messages.length, sendSocketData]);
 
   const sendMessage = useCallback((textOverride?: string) => {
     const text = (textOverride || inputText).trim();
@@ -551,12 +732,12 @@ export default function ChatPage() {
                   )}
                   <div className="max-w-[85%] space-y-2">
                     <div
-                      className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-line ${msg.sender === "fahd"
+                      className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${msg.sender === "fahd"
                         ? "bg-card border border-card-border shadow-sm rounded-tr-md"
-                        : "bg-[#CDEB63]/20 text-foreground rounded-tl-md"
+                        : "bg-[#CDEB63]/20 text-foreground rounded-tl-md whitespace-pre-line"
                         }`}
                     >
-                      {msg.text}
+                      {msg.sender === "fahd" ? <MarkdownMessage text={msg.text} /> : msg.text}
                     </div>
                     {msg.sender === "fahd" && (
                       <ActionButtons
