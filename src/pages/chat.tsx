@@ -89,6 +89,16 @@ function readStoredMessages(sessionId: string): ChatMsg[] {
   }
 }
 
+function parseHistoryMessages(messages: Array<{ id: string | number; role: string; content: string }>): ChatMsg[] {
+  return [...messages]
+    .reverse()
+    .map((message) => ({
+      id: String(message.id),
+      sender: message.role === "assistant" ? "fahd" : "user",
+      text: message.content || "",
+    }));
+}
+
 function normalizeText(text: string) {
   return text.replace(/\r\n/g, "\n");
 }
@@ -350,6 +360,7 @@ export default function ChatPage() {
   const [autoMessageSent, setAutoMessageSent] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -362,6 +373,7 @@ export default function ChatPage() {
   const shouldReconnectRef = useRef(true);
   const typingMessageIdRef = useRef<string | null>(null);
   const pendingMessagesRef = useRef<string[]>([]);
+  const historyRequestSentRef = useRef(false);
 
   const updateMessage = useCallback((messageId: string, updater: (message: ChatMsg) => ChatMsg) => {
     setMessages((prev) => prev.map((message) => (message.id === messageId ? updater(message) : message)));
@@ -388,6 +400,12 @@ export default function ChatPage() {
     }
   }, []);
 
+  const requestHistory = useCallback(() => {
+    if (!readyRef.current || historyRequestSentRef.current) return;
+    historyRequestSentRef.current = true;
+    sendSocketData({ type: "history" });
+  }, [sendSocketData]);
+
   const startHeartbeat = useCallback(() => {
     if (heartbeatTimerRef.current) window.clearInterval(heartbeatTimerRef.current);
     heartbeatTimerRef.current = window.setInterval(() => {
@@ -411,6 +429,8 @@ export default function ChatPage() {
     }
 
     readyRef.current = false;
+    historyRequestSentRef.current = false;
+    setIsHistoryLoaded(false);
     setConnectionStatus((prev) => (prev === "connected" ? "reconnecting" : "connecting"));
 
     const ws = new WebSocket(getWsUrl());
@@ -445,6 +465,7 @@ export default function ChatPage() {
         readyRef.current = true;
         setIsReady(true);
         setConnectionStatus("connected");
+        requestHistory();
         startHeartbeat();
         flushPendingMessages();
         return;
@@ -456,6 +477,7 @@ export default function ChatPage() {
         readyRef.current = true;
         setIsReady(true);
         setConnectionStatus("connected");
+        requestHistory();
         startHeartbeat();
         flushPendingMessages();
         return;
@@ -469,10 +491,20 @@ export default function ChatPage() {
         localStorage.removeItem(CHAT_SESSION_TOKEN_KEY);
         readyRef.current = false;
         setIsReady(false);
+        setIsHistoryLoaded(false);
         setMessages([]);
         setShowWelcome(true);
         setAutoMessageSent(false);
         ws.send(JSON.stringify({ type: "init" }));
+        return;
+      }
+
+      if (data.type === "history") {
+        const historyMessages = Array.isArray(data.messages) ? parseHistoryMessages(data.messages) : [];
+        setMessages(historyMessages);
+        setShowWelcome(historyMessages.length === 0);
+        setAutoMessageSent(historyMessages.length > 0 && !chatProductContext?.forceAutoSend);
+        setIsHistoryLoaded(true);
         return;
       }
 
@@ -546,6 +578,7 @@ export default function ChatPage() {
     ws.onclose = () => {
       readyRef.current = false;
       setIsReady(false);
+      setIsHistoryLoaded(false);
       stopHeartbeat();
       if (!shouldReconnectRef.current) {
         setConnectionStatus("disconnected");
@@ -626,7 +659,7 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!chatProductContext || autoMessageSent || !isReady) return;
+    if (!chatProductContext || autoMessageSent || !isReady || !isHistoryLoaded) return;
     if (messages.length > 0 && !chatProductContext.forceAutoSend) return;
 
     setAutoMessageSent(true);
@@ -635,18 +668,18 @@ export default function ChatPage() {
     const tempId = generateId();
     setMessages((prev) => [...prev, { id: tempId, sender: "user", text }]);
     sendSocketData({ type: "message", content: text });
-  }, [chatProductContext, autoMessageSent, isReady, messages.length, sendSocketData]);
+  }, [chatProductContext, autoMessageSent, isReady, isHistoryLoaded, messages.length, sendSocketData]);
 
   const sendMessage = useCallback((textOverride?: string) => {
     const text = (textOverride || inputText).trim();
-    if (!text || !isReady || isTyping) return;
+    if (!text || !isReady || !isHistoryLoaded || isTyping) return;
 
     const tempId = generateId();
     setMessages((prev) => [...prev, { id: tempId, sender: "user", text }]);
     setInputText("");
     setShowWelcome(false);
     sendSocketData({ type: "message", content: text });
-  }, [inputText, isReady, isTyping, sendSocketData]);
+  }, [inputText, isReady, isHistoryLoaded, isTyping, sendSocketData]);
 
   const handleTileClick = (tile: typeof quickTiles[0]) => {
     setShowWelcome(false);
@@ -663,6 +696,7 @@ export default function ChatPage() {
 
   const hasProductContext = !!chatProductContext;
   const isConnected = connectionStatus === "connected" && isReady;
+  const canSend = isConnected && isHistoryLoaded;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -743,7 +777,7 @@ export default function ChatPage() {
                     {msg.sender === "fahd" && (
                       <ActionButtons
                         actions={msg.actions || []}
-                        disabled={!isConnected || isTyping}
+                        disabled={!canSend || isTyping}
                         onSend={sendMessage}
                         onOpenProduct={(productId) => {
                           if (!productId) return;
@@ -752,7 +786,7 @@ export default function ChatPage() {
                       />
                     )}
                     {msg.sender === "fahd" && msg.actions?.some((action) => action.type === "address_form") && (
-                      <AddressFormCard cities={cities} disabled={!isConnected || isTyping} onSubmit={handleAddressSubmit} />
+                      <AddressFormCard cities={cities} disabled={!canSend || isTyping} onSubmit={handleAddressSubmit} />
                     )}
                   </div>
                 </div>
@@ -784,14 +818,14 @@ export default function ChatPage() {
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="اكتب لفهد هنا..."
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                disabled={!isConnected || isTyping}
+                disabled={!canSend || isTyping}
                 className="flex-1 rounded-full bg-card border-card-border min-h-[44px]"
                 data-testid="input-chat-message"
               />
               <Button
                 size="icon"
                 onClick={() => sendMessage()}
-                disabled={!isConnected || isTyping}
+                disabled={!canSend || isTyping}
                 className="rounded-full bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] shrink-0 min-h-[44px] min-w-[44px]"
                 data-testid="button-send-message"
               >
