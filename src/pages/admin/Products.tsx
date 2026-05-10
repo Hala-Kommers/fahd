@@ -13,20 +13,73 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2, Package } from "lucide-react";
-import type { Product } from "@shared/schema";
 import { useLocation } from "wouter";
+
+type ProductListStatus = "all" | "active" | "inactive";
+
+type AdminProductListItem = {
+  id: number | string;
+  title: string;
+  isActive?: boolean;
+  status?: string;
+  categoryName?: string;
+  category?: string;
+  sku?: string;
+  price?: number;
+  stockTotal?: number;
+  primaryImage?: string;
+  images?: { url: string; isPrimary?: boolean }[];
+  image?: string;
+  pricing?: { price?: number; currency?: string };
+  inventory?: {
+    stockTotal?: number;
+    mode?: string;
+    lowStockThreshold?: number;
+  };
+  variants?: { stock?: number }[];
+};
+
+type AdminProductsResponse = {
+  data: AdminProductListItem[];
+  meta?: {
+    limit: number;
+    page: number;
+    total: number;
+    totalPages: number;
+  };
+};
 
 export default function ProductsPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [status, setStatus] = useState<ProductListStatus>("all");
 
-  const { data: products = [], isLoading } = useQuery<Product[]>({
-    queryKey: ["/api/admin/products"],
+  const { data, isLoading } = useQuery<AdminProductsResponse>({
+    queryKey: ["/api/admin/products", page, limit, status],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+      if (status !== "all") params.set("status", status);
+      const res = await apiRequest(
+        "GET",
+        `/api/admin/products?${params.toString()}`,
+      );
+      return res.json();
+    },
   });
 
+  const products = data?.data ?? [];
+  const totalPages = data?.meta?.totalPages ?? 1;
+  const totalItems = data?.meta?.total ?? products.length;
+
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/products/${id}`),
+    mutationFn: (id: string) =>
+      apiRequest("DELETE", `/api/admin/products/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
@@ -35,15 +88,21 @@ export default function ProductsPage() {
       setDeleteConfirmId(null);
     },
     onError: (error: any) => {
-      toast({ title: "خطأ في حذف المنتج", description: error.message, variant: "destructive" });
-    }
+      toast({
+        title: "خطأ في حذف المنتج",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
     return (
       <div className="space-y-4 animate-pulse">
         {[1, 2, 3].map((i) => (
-          <Card key={i} className="p-4 rounded-xl"><div className="h-16 bg-muted rounded" /></Card>
+          <Card key={i} className="p-4 rounded-xl">
+            <div className="h-16 bg-muted rounded" />
+          </Card>
         ))}
       </div>
     );
@@ -52,19 +111,41 @@ export default function ProductsPage() {
   return (
     <div className="space-y-4 max-w-5xl">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-sm text-muted-foreground" data-testid="text-products-count">
-          {products.length} منتج
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="text-products-count"
+        >
+          {totalItems} منتج
         </p>
-        <Button onClick={() => setLocation("/admin/products/new")} className="gap-1" data-testid="button-add-product">
-          <Plus className="w-4 h-4" />
-          إضافة منتج
-        </Button>
+        <div className="flex items-center gap-2">
+          <select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value as ProductListStatus);
+              setPage(1);
+            }}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            data-testid="select-products-status"
+          >
+            <option value="all">كل الحالات</option>
+            <option value="active">نشط</option>
+            <option value="draft">درافت</option>
+          </select>
+          <Button
+            onClick={() => setLocation("/admin/products/new")}
+            className="gap-1"
+            data-testid="button-add-product"
+          >
+            <Plus className="w-4 h-4" />
+            إضافة منتج
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-3">
-        {products.map((product: any) => {
-          // Support both old schema (image, price) and new schema (images[], pricing.price)
+        {products.map((product) => {
           const primaryImage =
+            product.primaryImage ||
             product.images?.find((img: any) => img?.isPrimary)?.url ||
             product.images?.[0]?.url ||
             product.image ||
@@ -72,47 +153,83 @@ export default function ProductsPage() {
 
           const displayPrice = product.pricing?.price ?? product.price ?? 0;
           const displayCurrency = product.pricing?.currency ?? "SAR";
-          const displayCategory = product.category ?? "";
+          const displayCategory =
+            product.categoryName ?? product.category ?? "";
           const displaySku = product.sku ?? "";
+          const isActive = product.isActive ?? product.status === "active";
 
           const stockDisplay = (() => {
+            if (typeof product.stockTotal === "number") {
+              return <span>المخزون: {product.stockTotal}</span>;
+            }
             if (product.inventory) {
               if (product.inventory.mode === "global") {
-                const low = product.inventory.stockTotal <= product.inventory.lowStockThreshold;
-                return <span className={low ? "text-destructive font-medium" : ""}>المخزون: {product.inventory.stockTotal}</span>;
+                const low =
+                  product.inventory.stockTotal <=
+                  product.inventory.lowStockThreshold;
+                return (
+                  <span className={low ? "text-destructive font-medium" : ""}>
+                    المخزون: {product.inventory.stockTotal}
+                  </span>
+                );
               } else {
-                const total = (product.variants ?? []).reduce((acc: number, v: any) => acc + (v.stock ?? 0), 0);
+                const total = (product.variants ?? []).reduce(
+                  (acc: number, v: any) => acc + (v.stock ?? 0),
+                  0,
+                );
                 return <span>{total} قطعة (متغيرات)</span>;
               }
             }
-            return <span>المخزون: {product.stock ?? "—"}</span>;
+            return <span>المخزون: —</span>;
           })();
 
           return (
-            <Card key={product.id} className="rounded-xl border-card-border p-4 hover:bg-accent/5 transition-colors">
+            <Card
+              key={product.id}
+              className="rounded-xl border-card-border p-4 hover:bg-accent/5 transition-colors"
+            >
               <div className="flex gap-4 items-center">
                 <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/50">
                   {primaryImage ? (
-                    <img src={primaryImage} alt={product.title} className="w-full h-full object-cover" />
+                    <img
+                      src={primaryImage}
+                      alt={product.title}
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <Package className="w-6 h-6 text-muted-foreground" />
                   )}
                 </div>
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setLocation(`/admin/products/${product.id}`)}>
+                <div
+                  className="flex-1 min-w-0 cursor-pointer"
+                  onClick={() => setLocation(`/admin/products/${product.id}`)}
+                >
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-sm line-clamp-1 hover:text-primary transition-colors" data-testid={`product-title-${product.id}`}>
+                    <h3
+                      className="font-semibold text-sm line-clamp-1 hover:text-primary transition-colors"
+                      data-testid={`product-title-${product.id}`}
+                    >
                       {product.title}
                     </h3>
-                    <Badge variant={product.status === "active" ? "default" : "secondary"} className="text-[10px] h-5 px-1.5">
-                      {product.status === "active" ? "نشط" : product.status === "draft" ? "مسودة" : "نشط"}
+                    <Badge
+                      variant={isActive ? "default" : "secondary"}
+                      className="text-[10px] h-5 px-1.5"
+                    >
+                      {isActive ? "نشط" : "غير نشط"}
                     </Badge>
                   </div>
 
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    {displayCategory && <span className="bg-muted px-1.5 py-0.5 rounded text-[10px]">{displayCategory}</span>}
+                    {displayCategory && (
+                      <span className="bg-muted px-1.5 py-0.5 rounded text-[10px]">
+                        {displayCategory}
+                      </span>
+                    )}
                     {displaySku && <span>SKU: {displaySku}</span>}
                     <span className="hidden sm:inline">|</span>
-                    <span className="font-medium text-foreground">{displayPrice} {displayCurrency}</span>
+                    <span className="font-medium text-foreground">
+                      {displayPrice} {displayCurrency}
+                    </span>
                     {stockDisplay}
                   </div>
                 </div>
@@ -144,24 +261,65 @@ export default function ProductsPage() {
           <div className="text-center py-10 text-muted-foreground">
             <Package className="w-12 h-12 mx-auto mb-3 opacity-20" />
             <p>لا يوجد منتجات حالياً</p>
-            <Button variant="ghost" onClick={() => setLocation("/admin/products/new")}>إضافة أول منتج</Button>
+            <Button
+              variant="ghost"
+              onClick={() => setLocation("/admin/products/new")}
+            >
+              إضافة أول منتج
+            </Button>
           </div>
         )}
       </div>
 
-      <Dialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>
+      <div className="flex items-center justify-between pt-2">
+        <Button
+          variant="outline"
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+          disabled={page <= 1}
+          data-testid="button-prev-page"
+        >
+          السابق
+        </Button>
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="text-page-indicator"
+        >
+          صفحة {page} من {Math.max(totalPages, 1)}
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => setPage((p) => (p < totalPages ? p + 1 : p))}
+          disabled={page >= totalPages}
+          data-testid="button-next-page"
+        >
+          التالي
+        </Button>
+      </div>
+
+      <Dialog
+        open={deleteConfirmId !== null}
+        onOpenChange={() => setDeleteConfirmId(null)}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>حذف المنتج</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">هل أنت متأكد من حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء.</p>
+          <p className="text-sm text-muted-foreground">
+            هل أنت متأكد من حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء.
+          </p>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleteConfirmId(null)} data-testid="button-cancel-delete">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmId(null)}
+              data-testid="button-cancel-delete"
+            >
               إلغاء
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
+              onClick={() =>
+                deleteConfirmId && deleteMutation.mutate(deleteConfirmId)
+              }
               disabled={deleteMutation.isPending}
               data-testid="button-confirm-delete"
             >

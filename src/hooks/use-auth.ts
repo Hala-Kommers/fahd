@@ -6,19 +6,26 @@ export interface AdminUser {
   id: number;
   username: string;
   email?: string;
+  name?: string;
   role: string;
-  createdAt: string;
+  createdAt?: string;
 }
 
 export function useAuth() {
-  const { data, isLoading } = useQuery<{ user: AdminUser } | null>({
+  const { data, isLoading } = useQuery<any>({
     queryKey: ["/api/auth/me"],
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
 
+  const user: AdminUser | null =
+    data?.user ??
+    data?.data?.user ??
+    data?.data ??
+    null;
+
   return {
-    user: data?.user ?? null,
+    user,
     isLoading,
   };
 }
@@ -29,8 +36,9 @@ export function useLogin() {
     mutationFn: async ({ username, password }: { username: string; password: string }) => {
       const res = await apiRequest("POST", "/api/auth/login", { username, password });
       const body = await res.json();
-      const accessToken = body?.accessToken ?? body?.tokens?.accessToken;
-      const refreshToken = body?.refreshToken ?? body?.tokens?.refreshToken;
+      const source = body?.data ?? body;
+      const accessToken = source?.token ?? source?.accessToken ?? source?.tokens?.accessToken;
+      const refreshToken = source?.refreshToken ?? source?.tokens?.refreshToken;
       if (accessToken) {
         setAuthTokens(accessToken, refreshToken);
       }

@@ -34,6 +34,10 @@ export interface CartItemData {
   quantity: number;
   color: string;
   size: string;
+  variantId?: string | number | null;
+  variantAttributes?: Record<string, string>;
+  variantLabel?: string;
+  variantPrice?: number;
 }
 
 export interface ChatProductContext {
@@ -69,9 +73,18 @@ interface FahdStore {
   setCustomerPhone: (phone: string) => void;
   setCustomerAddress: (address: string) => void;
   setPaymentMethod: (method: string) => void;
-  addToCart: (product: Product, quantity: number, color: string, size: string) => void;
-  removeFromCart: (productId: string | number) => void;
-  updateCartQuantity: (productId: string | number, quantity: number) => void;
+  addToCart: (
+    product: Product,
+    quantity: number,
+    color: string,
+    size: string,
+    variantId?: string | number | null,
+    variantAttributes?: Record<string, string>,
+    variantLabel?: string,
+    variantPrice?: number,
+  ) => void;
+  removeFromCart: (productId: string | number, variantId?: string | number | null) => void;
+  updateCartQuantity: (productId: string | number, quantity: number, variantId?: string | number | null) => void;
   clearCart: () => void;
   setAppliedCoupon: (coupon: { code: string; type: "percentage" | "fixed"; value: number } | null) => void;
   getCartTotal: () => number;
@@ -126,6 +139,13 @@ export function FahdProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
   }, [cartItems]);
+
+  const getItemKey = useCallback((item: Pick<CartItemData, "product" | "variantId" | "color" | "size">) => {
+    if (item.variantId !== undefined && item.variantId !== null) {
+      return `${item.product.id}::variant::${String(item.variantId)}`;
+    }
+    return `${item.product.id}::base::${item.color || ""}::${item.size || ""}`;
+  }, []);
 
   const openOrderSheet = useCallback((product: Product) => {
     setOrderProduct(product);
@@ -190,32 +210,38 @@ export function FahdProvider({ children }: { children: ReactNode }) {
     setOrderStep(step);
   }, []);
 
-  const addToCart = useCallback((product: Product, qty: number, color: string, size: string) => {
+  const addToCart = useCallback((product: Product, qty: number, color: string, size: string, variantId?: string | number | null, variantAttributes?: Record<string, string>, variantLabel?: string, variantPrice?: number) => {
     setCartItems((prev) => {
-      const existing = prev.findIndex(
-        (item) => item.product.id === product.id && item.color === color && item.size === size
-      );
+      const existing = prev.findIndex((item) => getItemKey(item) === getItemKey({ product, variantId, color, size }));
       if (existing >= 0) {
         const updated = [...prev];
         updated[existing] = { ...updated[existing], quantity: updated[existing].quantity + qty };
         return updated;
       }
-      return [...prev, { product, quantity: qty, color, size }];
+      return [...prev, { product, quantity: qty, color, size, variantId: variantId ?? null, variantAttributes, variantLabel, variantPrice }];
     });
+  }, [getItemKey]);
+
+  const removeFromCart = useCallback((productId: string | number, variantId?: string | number | null) => {
+    setCartItems((prev) => prev.filter((item) => {
+      if (String(item.product.id) !== String(productId)) return true;
+      if (variantId === undefined || variantId === null) return false;
+      return String(item.variantId ?? "") !== String(variantId);
+    }));
   }, []);
 
-  const removeFromCart = useCallback((productId: string | number) => {
-    setCartItems((prev) => prev.filter((item) => String(item.product.id) !== String(productId)));
-  }, []);
-
-  const updateCartQuantity = useCallback((productId: string | number, quantity: number) => {
+  const updateCartQuantity = useCallback((productId: string | number, quantity: number, variantId?: string | number | null) => {
     if (quantity <= 0) {
-      setCartItems((prev) => prev.filter((item) => String(item.product.id) !== String(productId)));
+      setCartItems((prev) => prev.filter((item) => {
+        if (String(item.product.id) !== String(productId)) return true;
+        if (variantId === undefined || variantId === null) return false;
+        return String(item.variantId ?? "") !== String(variantId);
+      }));
       return;
     }
     setCartItems((prev) =>
       prev.map((item) =>
-        String(item.product.id) === String(productId) ? { ...item, quantity } : item
+        String(item.product.id) === String(productId) && String(item.variantId ?? "") === String(variantId ?? "") ? { ...item, quantity } : item
       )
     );
   }, []);
@@ -228,7 +254,7 @@ export function FahdProvider({ children }: { children: ReactNode }) {
   const getCartTotal = useCallback(() => {
     return cartItems.reduce((sum, item) => {
       const p = item.product as any;
-      const price = p.pricing?.price ?? p.price ?? 0;
+      const price = item.variantPrice ?? p.pricing?.price ?? p.price ?? 0;
       return sum + price * item.quantity;
     }, 0);
   }, [cartItems]);
@@ -239,7 +265,7 @@ export function FahdProvider({ children }: { children: ReactNode }) {
     if (Number.isNaN(couponValue)) return 0;
     const total = cartItems.reduce((sum, item) => {
       const p = item.product as any;
-      const price = p.pricing?.price ?? p.price ?? 0;
+      const price = item.variantPrice ?? p.pricing?.price ?? p.price ?? 0;
       return sum + price * item.quantity;
     }, 0);
     if (appliedCoupon.type === "percentage") {

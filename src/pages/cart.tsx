@@ -149,6 +149,7 @@ export default function CartPage() {
     const firstItem = cartItems[0];
     orderMutation.mutate({
       productId: firstItem.product.id,
+      variantId: firstItem.variantId ?? undefined,
       variant: `${firstItem.color}${firstItem.size ? " - " + firstItem.size : ""}`,
       quantity: firstItem.quantity,
       customerName,
@@ -162,6 +163,7 @@ export default function CartPage() {
       totalAmount: total,
       items: cartItems.map((item) => ({
         productId: item.product.id,
+        variantId: item.variantId ?? undefined,
         qty: item.quantity,
         quantity: item.quantity,
         color: item.color || undefined,
@@ -269,7 +271,7 @@ export default function CartPage() {
               <div className="space-y-3">
                 {cartItems.map((item, idx) => (
                   <Card
-                    key={`${item.product.id}-${item.color}-${item.size}`}
+                    key={`${item.product.id}-${item.variantId ?? item.color}-${item.size}`}
                     className="rounded-xl p-3 border-card-border animate-slide-in-right"
                     style={{ animationDelay: `${idx * 0.08}s` }}
                     data-testid={`cart-item-${item.product.id}`}
@@ -294,7 +296,7 @@ export default function CartPage() {
                             {item.product.title}
                           </h3>
                           <button
-                            onClick={() => removeFromCart(item.product.id)}
+                            onClick={() => removeFromCart(item.product.id, item.variantId)}
                             className="text-muted-foreground shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                             data-testid={`button-remove-${item.product.id}`}
                           >
@@ -318,13 +320,22 @@ export default function CartPage() {
                               {item.size}
                             </Badge>
                           )}
+                          {item.variantLabel && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] no-default-hover-elevate"
+                            >
+                              {item.variantLabel}
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
                           <span className="font-bold text-sm">
                             {formatPrice(
-                              ((item.product as any).pricing?.price ??
+                              ((item.variantPrice ??
+                                (item.product as any).pricing?.price ??
                                 (item.product as any).price ??
-                                0) * item.quantity,
+                                0) * item.quantity),
                             )}
                           </span>
                           <div className="flex items-center gap-2">
@@ -336,6 +347,7 @@ export default function CartPage() {
                                 updateCartQuantity(
                                   item.product.id,
                                   item.quantity - 1,
+                                  item.variantId,
                                 )
                               }
                               data-testid={`button-qty-minus-${item.product.id}`}
@@ -362,6 +374,7 @@ export default function CartPage() {
                                       999,
                                     item.quantity + 1,
                                   ),
+                                  item.variantId,
                                 )
                               }
                               data-testid={`button-qty-plus-${item.product.id}`}

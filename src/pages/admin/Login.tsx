@@ -106,11 +106,6 @@ export default function LoginPage() {
             </form>
           </CardContent>
         </Card>
-
-        <p className="text-center text-xs text-muted-foreground">
-          بيانات الدخول الافتراضية:{" "}
-          <span className="font-mono font-medium">admin / admin123</span>
-        </p>
       </div>
     </div>
   );

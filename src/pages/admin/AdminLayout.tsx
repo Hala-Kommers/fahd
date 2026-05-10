@@ -52,7 +52,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <SidebarProvider style={style as React.CSSProperties} defaultOpen={true}>
-      <div className="flex h-screen w-full bg-muted/20" dir="rtl">
+      <div className="flex min-h-screen w-full bg-muted/20" dir="rtl">
         <Sidebar side="right" variant="floating" className="border-l border-sidebar-border">
           <SidebarContent>
             <SidebarGroup>
@@ -108,7 +108,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </SidebarContent>
         </Sidebar>
 
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0">
           <header className="sticky top-0 z-40 flex items-center justify-between gap-3 px-6 py-3 border-b border-border bg-background/80 backdrop-blur-xl">
             <div className="flex items-center gap-3 flex-1">
               <SidebarTrigger data-testid="button-admin-sidebar-toggle" />
@@ -149,7 +149,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </Link>
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto p-4 md:p-8 md:pt-6 bg-muted/5">
+          <main className="flex-1 p-4 md:p-8 md:pt-6 bg-muted/5">
             {children}
           </main>
         </div>
@@ -157,4 +157,3 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </SidebarProvider>
   );
 }
-

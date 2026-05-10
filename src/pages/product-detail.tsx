@@ -14,7 +14,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Star, Minus, Plus, Truck, CreditCard, ShieldCheck, ArrowRight, ShoppingCart } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function ProductDetail() {
   const params = useParams<{ id: string }>();
@@ -25,10 +25,77 @@ export default function ProductDetail() {
   const [selectedSize, setSelectedSize] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [selectedTierIdx, setSelectedTierIdx] = useState(0);
+  const [selectedImageIdx, setSelectedImageIdx] = useState(0);
+  const [selectedVariantAttributes, setSelectedVariantAttributes] = useState<Record<string, string>>({});
 
   const { data: rawProduct, isLoading } = useQuery<any>({
     queryKey: ["/api/products", params.id],
   });
+
+  const product = rawProduct as any;
+  const displayImage = product?.images?.find((img: any) => img?.isPrimary)?.url
+    || product?.images?.[0]?.url
+    || product?.image
+    || "";
+  const productImages: string[] = (product?.images ?? [])
+    .map((img: any) => img?.url)
+    .filter(Boolean);
+  const hasMultipleImages = productImages.length > 1;
+  const selectedImage = productImages[selectedImageIdx] || displayImage;
+
+  const variantOptionNames: string[] = Array.isArray(product?.variantOptions) && product.variantOptions.length > 0
+    ? product.variantOptions
+    : Array.from(new Set((product?.variants ?? []).flatMap((variant: any) => Object.keys(variant?.attributes || {}))));
+
+  const variantOptionValues = variantOptionNames.reduce<Record<string, string[]>>((acc, optionName) => {
+    acc[optionName] = Array.from(new Set((product?.variants ?? [])
+      .map((variant: any) => variant?.attributes?.[optionName])
+      .filter(Boolean)));
+    return acc;
+  }, {});
+
+  const selectedVariant = variantOptionNames.length > 0
+    ? (product?.variants ?? []).find((variant: any) =>
+        variantOptionNames.every((optionName) => variant?.attributes?.[optionName] === selectedVariantAttributes[optionName])
+      )
+    : null;
+
+  const isVariantValueAvailable = (optionName: string, value: string) => {
+    const variants = (product?.variants ?? []).filter((variant: any) => variant?.isActive !== false);
+    return variants.some((variant: any) =>
+      variantOptionNames.every((name) => {
+        if (name === optionName) return variant?.attributes?.[name] === value;
+        const selectedValue = selectedVariantAttributes[name];
+        return !selectedValue || variant?.attributes?.[name] === selectedValue;
+      })
+    );
+  };
+
+  useEffect(() => {
+    if (!productImages.length) {
+      setSelectedImageIdx(0);
+      return;
+    }
+
+    const primaryIndex = productImages.findIndex((image) => image === displayImage);
+    setSelectedImageIdx(primaryIndex >= 0 ? primaryIndex : 0);
+  }, [displayImage, productImages.length]);
+
+  useEffect(() => {
+    if (!variantOptionNames.length) {
+      setSelectedVariantAttributes({});
+      return;
+    }
+
+    setSelectedVariantAttributes((current) => {
+      const next: Record<string, string> = {};
+      variantOptionNames.forEach((optionName) => {
+        const optionValues = variantOptionValues[optionName] || [];
+        next[optionName] = current[optionName] || optionValues[0] || "";
+      });
+      return next;
+    });
+  }, [variantOptionNames.join("|"), product?.id]);
 
   if (isLoading) {
     return (
@@ -61,18 +128,18 @@ export default function ProductDetail() {
       </div>
     );
   }
-
-  const product = rawProduct as any;
-  const displayImage = product.images?.find((img: any) => img?.isPrimary)?.url
-    || product.images?.[0]?.url
-    || product.image
-    || "";
   const pricingTiers: { qty: number; label?: string; originalPrice: number; finalPrice: number }[] = product.pricingTiers ?? [];
   const hasTiers = pricingTiers.length > 0;
   const activeTier = hasTiers ? pricingTiers[selectedTierIdx] : null;
-  const displayPrice = activeTier ? activeTier.finalPrice : (product.pricing?.price ?? product.price ?? 0);
-  const displayOldPrice = activeTier ? activeTier.originalPrice : (product.pricing?.compareAt ?? product.oldPrice ?? null);
-  const displayStock = product.stockTotal ?? product.inventory?.stockTotal ?? product.stock ?? 0;
+  const selectedDisplayImage = selectedVariant?.image || selectedImage;
+  const displayPrice = selectedVariant?.priceOverride > 0
+    ? selectedVariant.priceOverride
+    : (activeTier ? activeTier.finalPrice : (product?.pricing?.price ?? product?.price ?? 0));
+  const rawOldPrice = activeTier
+    ? activeTier.originalPrice
+    : (product?.pricing?.compareAt ?? product?.compareAt ?? product?.oldPrice ?? null);
+  const displayOldPrice = rawOldPrice && rawOldPrice > displayPrice ? rawOldPrice : null;
+  const displayStock = selectedVariant?.stock ?? (product.stockTotal ?? product.inventory?.stockTotal ?? product.stock ?? 0);
   const displayRating = product.rating ?? 0;
   const displayFaq: { question: string; answer: string }[] = product.faq ?? [];
   const displayBadges: string[] = product.badges ?? [];
@@ -127,11 +194,12 @@ export default function ProductDetail() {
         </div>
 
         <div className="bg-muted/30 rounded-[24px] mx-4 overflow-hidden mb-4 animate-fade-in">
-          {displayImage ? (
+          {selectedDisplayImage ? (
             <img
-              src={displayImage}
+              key={selectedDisplayImage}
+              src={selectedDisplayImage}
               alt={product.title}
-              className="w-full aspect-square object-cover"
+              className="w-full aspect-square object-cover animate-fade-in"
               data-testid="img-product-main"
             />
           ) : (
@@ -140,6 +208,24 @@ export default function ProductDetail() {
             </div>
           )}
         </div>
+
+        {hasMultipleImages && (
+          <div className="px-4 mb-4">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {productImages.map((image, index) => (
+                <button
+                  key={`${image}-${index}`}
+                  type="button"
+                  onClick={() => setSelectedImageIdx(index)}
+                  className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition-all ${selectedImageIdx === index ? "border-[#CDEB63] scale-105" : "border-transparent opacity-70"}`}
+                  data-testid={`thumbnail-product-${index}`}
+                >
+                  <img src={image} alt={`${product.title} ${index + 1}`} className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="px-4 space-y-4 animate-slide-up-spring">
           <div>
@@ -157,6 +243,11 @@ export default function ProductDetail() {
               <span className="text-2xl font-bold text-foreground" data-testid="text-product-price">
                 {formatPrice(displayPrice)}
               </span>
+              {selectedVariant?.priceOverride > 0 && (
+                <Badge className="bg-[#CDEB63]/15 text-[#5f7f13] border-0 text-xs no-default-hover-elevate">
+                  لهذا SKU سعر خاص
+                </Badge>
+              )}
               {displayOldPrice && (
                 <span className="text-base text-muted-foreground line-through">
                   {formatPrice(displayOldPrice)}
@@ -206,7 +297,39 @@ export default function ProductDetail() {
             </div>
           )}
 
-          {colors.length > 1 && (
+          {variantOptionNames.length > 0 && (
+            <div className="space-y-4">
+              {variantOptionNames.map((optionName) => (
+                <div key={optionName}>
+                  <h3 className="text-sm font-semibold mb-2">{optionName}</h3>
+                  <div className="flex gap-2 flex-wrap">
+                    {(variantOptionValues[optionName] || []).map((value) => {
+                      const active = selectedVariantAttributes[optionName] === value;
+                      const available = isVariantValueAvailable(optionName, value);
+                      return (
+                        <button
+                          key={`${optionName}-${value}`}
+                          onClick={() => setSelectedVariantAttributes((prev) => ({ ...prev, [optionName]: value }))}
+                          disabled={!available}
+                          className={`px-4 py-2 rounded-xl border text-sm transition-all min-h-[44px] active:scale-95 ${active
+                              ? "border-[#CDEB63] bg-[#CDEB63]/10 font-semibold"
+                              : available
+                                ? "border-border bg-card"
+                                : "border-border bg-card opacity-40 cursor-not-allowed"
+                            }`}
+                          data-testid={`chip-${optionName}-${value}`}
+                        >
+                          {value}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {variantOptionNames.length === 0 && colors.length > 1 && (
             <div>
               <h3 className="text-sm font-semibold mb-2">اللون</h3>
               <div className="flex gap-2 flex-wrap">
@@ -231,7 +354,7 @@ export default function ProductDetail() {
             </div>
           )}
 
-          {sizes.length > 0 && (
+          {variantOptionNames.length === 0 && sizes.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold mb-2">المقاس</h3>
               <div className="flex gap-2 flex-wrap">
@@ -364,14 +487,28 @@ export default function ProductDetail() {
 
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-xl border-t border-border/50 p-3">
         <div className="max-w-3xl mx-auto flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            className="shrink-0 rounded-xl min-h-[48px] min-w-[48px]"
-            onClick={() => {
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0 rounded-xl min-h-[48px] min-w-[48px]"
+                onClick={() => {
+              if (variantOptionNames.length > 0 && !selectedVariant) {
+                toast({ title: "اختر الخيارات أولاً", variant: "destructive" });
+                return;
+              }
+
               const color = colors[selectedColor]?.name || "";
               const size = sizes[selectedSize] || "";
-              addToCart(product, quantity, color, size);
+              addToCart(
+                product,
+                quantity,
+                color,
+                size,
+                selectedVariant?.id ?? null,
+                selectedVariant?.attributes,
+                variantOptionNames.length > 0 ? Object.values(selectedVariant?.attributes || {}).join(" - ") : undefined,
+                selectedVariant?.priceOverride || undefined,
+              );
               toast({
                 title: "انضاف للسلة ✅",
                 description: `${product.title} (${quantity})`,
@@ -381,13 +518,30 @@ export default function ProductDetail() {
           >
             <ShoppingCart className="w-5 h-5" />
           </Button>
-          <Button
-            className="flex-1 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-bold text-base gap-2 min-h-[48px]"
-            onClick={() => openOrderSheet(hasTiers ? { ...product, pricing: { ...product.pricing, price: activeTier!.finalPrice, compareAt: activeTier!.originalPrice } } : product)}
-            data-testid="button-order-now"
-          >
-            اطلب الآن - {formatPrice(hasTiers ? activeTier!.finalPrice : displayPrice * quantity)}
-          </Button>
+            <Button
+              className="flex-1 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-bold text-base gap-2 min-h-[48px]"
+            onClick={() => {
+              if (variantOptionNames.length > 0 && !selectedVariant) {
+                toast({ title: "اختر الخيارات أولاً", variant: "destructive" });
+                return;
+              }
+
+              const orderProduct = hasTiers
+                ? { ...product, pricing: { ...product.pricing, price: activeTier!.finalPrice, compareAt: activeTier!.originalPrice } }
+                : product;
+
+              openOrderSheet({
+                ...orderProduct,
+                selectedVariantId: selectedVariant?.id ?? null,
+                selectedVariantLabel: variantOptionNames.length > 0 ? Object.values(selectedVariant?.attributes || {}).join(" - ") : undefined,
+                selectedVariantPrice: selectedVariant?.priceOverride || undefined,
+                selectedVariantStock: selectedVariant?.stock || undefined,
+              } as any);
+            }}
+              data-testid="button-order-now"
+            >
+            اطلب الآن - {formatPrice(displayPrice * quantity)}
+            </Button>
         </div>
       </div>
     </div>

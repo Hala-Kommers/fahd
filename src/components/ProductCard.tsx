@@ -20,7 +20,8 @@ export default function ProductCard({ product }: ProductCardProps) {
   const p = product as any;
   const displayImage = p.primaryImage || p.images?.find((img: any) => img?.isPrimary)?.url || p.images?.[0]?.url || p.image || "";
   const displayPrice = p.pricing?.price ?? p.price ?? 0;
-  const displayOldPrice = p.pricing?.compareAt ?? p.oldPrice ?? null;
+  const displayOldPrice = p.pricing?.compareAt ?? p.compareAt ?? p.oldPrice ?? null;
+  const hasVariants = (p.variantOptions?.length ?? 0) > 0 || (p.variants?.length ?? 0) > 0;
   const firstColor = p.variants?.colors?.[0]?.name
     || (p.variants ?? []).find((v: any) => v.attributes?.color)?.attributes?.color
     || "";
@@ -30,6 +31,11 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (hasVariants) {
+      toast({ title: "اختر الخيارات أولاً", description: product.title, variant: "destructive" });
+      navigate(`/product/${product.id}`);
+      return;
+    }
     addToCart(product, 1, firstColor, firstSize);
     toast({
       title: "انضاف للسلة ✅",
@@ -94,14 +100,19 @@ export default function ProductCard({ product }: ProductCardProps) {
       </button>
 
       <div className="px-3 pb-3 flex gap-2">
-        <Button
-          className="flex-1 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-semibold min-h-[44px]"
-          onClick={(e) => {
-            e.stopPropagation();
-            openOrderSheet(product);
-          }}
-          data-testid={`button-order-${product.id}`}
-        >
+          <Button
+            className="flex-1 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-semibold min-h-[44px]"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (hasVariants) {
+                toast({ title: "اختر الخيارات أولاً", description: product.title, variant: "destructive" });
+                navigate(`/product/${product.id}`);
+                return;
+              }
+              openOrderSheet(product);
+            }}
+            data-testid={`button-order-${product.id}`}
+          >
           اطلبه الحين
         </Button>
         <Button

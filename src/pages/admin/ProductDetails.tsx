@@ -1,9 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
-import { insertProductSchema, type InsertProduct, type Product } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,14 +11,37 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Save, Loader2, Plus, Trash2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
+type CategoryOption = {
+    id: number | string;
+    name: string;
+};
+
+type VariantOptionGroup = {
+    id: string;
+    name: string;
+    values: string[];
+};
+
+type VariantRow = {
+    key: string;
+    sku: string;
+    attributes: Record<string, string>;
+    priceOverride: number;
+    stock: number;
+    isActive: boolean;
+};
+
 // Default values for new product
-const defaultValues: Partial<InsertProduct> = {
+const defaultValues: any = {
     title: "",
+    slug: "",
     sku: "",
     status: "active",
+    isFeatured: false,
     descriptionShort: "",
     descriptionLong: "",
     category: "",
@@ -47,6 +68,89 @@ const defaultValues: Partial<InsertProduct> = {
     rating: 0,
 };
 
+function slugify(value: string) {
+    return value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-");
+}
+
+function variantKeyFromAttributes(attributes: Record<string, string>, optionNames: string[]) {
+    return optionNames.map((name) => `${name}:${attributes[name] || ""}`).join("|");
+}
+
+function cartesianProduct(groups: VariantOptionGroup[]) {
+    if (!groups.length || groups.some((group) => group.values.length === 0)) return [] as Record<string, string>[];
+
+    return groups.reduce<Record<string, string>[]>((acc, group) => {
+        const next: Record<string, string>[] = [];
+        acc.forEach((base) => {
+            group.values.forEach((value) => {
+              next.push({ ...base, [group.name]: value });
+            });
+        });
+        return next;
+    }, [{}]);
+}
+
+function buildVariantGroupsFromProduct(product: any): VariantOptionGroup[] {
+    const optionNames = Array.isArray(product?.variantOptions)
+        ? product.variantOptions.filter(Boolean)
+        : [];
+    const variants = Array.isArray(product?.variants) ? product.variants : [];
+    const inferredNames = optionNames.length > 0
+        ? optionNames
+        : Array.from(
+            new Set(
+                variants.flatMap((variant: any) => Object.keys(variant?.attributes || {}))
+            )
+        );
+
+    if (inferredNames.length === 0) return [];
+
+    return inferredNames.map((name: string) => createVariantGroup(
+        name,
+        Array.from(
+            new Set(
+                variants
+                    .map((variant: any) => variant?.attributes?.[name])
+                    .filter(Boolean)
+            )
+        )
+    ));
+}
+
+function normalizeVariantRows(groups: VariantOptionGroup[], existingRows: VariantRow[]) {
+    const optionNames = groups.map((group) => group.name);
+    const combos = cartesianProduct(groups);
+    const existingMap = new Map(
+        existingRows.map((row) => [row.key, row])
+    );
+
+    return combos.map((attributes) => {
+        const key = variantKeyFromAttributes(attributes, optionNames);
+        const existing = existingMap.get(key);
+        return {
+            key,
+            sku: existing?.sku || "",
+            attributes,
+            priceOverride: existing?.priceOverride ?? 0,
+            stock: existing?.stock ?? 0,
+            isActive: existing?.isActive ?? true,
+        };
+    });
+}
+
+function createVariantGroup(name = "", values: string[] = []): VariantOptionGroup {
+    return {
+        id: Math.random().toString(36).slice(2),
+        name,
+        values,
+    };
+}
+
 export default function ProductDetails() {
     const { toast } = useToast();
     const [location, setLocation] = useLocation();
@@ -55,28 +159,62 @@ export default function ProductDetails() {
     const productId = routeParams.id ?? "new";
     const isEditing = !!match && productId !== "new";
 
-    const form = useForm<InsertProduct>({
-        resolver: zodResolver(insertProductSchema),
+    const form = useForm<any>({
         defaultValues,
     });
+    const [variantGroups, setVariantGroups] = useState<VariantOptionGroup[]>([]);
+    const [generatedVariants, setGeneratedVariants] = useState<VariantRow[]>([]);
+    const [variantValueDrafts, setVariantValueDrafts] = useState<Record<string, string>>({});
+    const [deletedVariantKeys, setDeletedVariantKeys] = useState<string[]>([]);
 
-    const { data: product, isLoading: isLoadingProduct } = useQuery<Product>({
+    const { data: product, isLoading: isLoadingProduct } = useQuery<any>({
         queryKey: [`/api/admin/products/${productId}`],
         enabled: !!isEditing && !!productId,
     });
 
+    const { data: categoriesRaw = [] } = useQuery<any[]>({
+        queryKey: ["/api/categories"],
+    });
+
+    const categories: CategoryOption[] = (Array.isArray(categoriesRaw) ? categoriesRaw : [])
+        .map((item: any) => {
+            const source = item?.data ?? item;
+            if (!source?.id || !source?.name) return null;
+            return { id: source.id, name: source.name };
+        })
+        .filter((item): item is CategoryOption => !!item);
+
     useEffect(() => {
         if (product) {
-            // populate form with product data
-            // We need to ensure types match perfectly.
-            // InsertProduct omits id, but has same structure otherwise.
-            const { id, ...rest } = product;
-            form.reset(rest as InsertProduct);
+            const source = product?.data ?? product;
+            const { id, category, ...rest } = source;
+            form.reset({
+                ...rest,
+                slug: source?.slug || "",
+                isFeatured: !!source?.isFeatured,
+                status: source?.status || (source?.isActive ? "active" : "draft"),
+                category: String(category?.id ?? category ?? ""),
+            });
+
+            const groups = buildVariantGroupsFromProduct(source);
+            setVariantGroups(groups);
+
+            const existingRows: VariantRow[] = Array.isArray(source?.variants)
+                ? source.variants.map((variant: any) => ({
+                    key: variantKeyFromAttributes(variant?.attributes || {}, groups.map((group) => group.name)),
+                    sku: variant?.sku || "",
+                    attributes: variant?.attributes || {},
+                    priceOverride: Number(variant?.priceOverride ?? 0),
+                    stock: Number(variant?.stock ?? 0),
+                    isActive: variant?.isActive !== false,
+                }))
+                : [];
+            setGeneratedVariants(normalizeVariantRows(groups, existingRows));
         }
     }, [product, form]);
 
     const createMutation = useMutation({
-        mutationFn: (data: InsertProduct) => apiRequest("POST", "/api/admin/products", data),
+        mutationFn: (data: any) => apiRequest("POST", "/api/admin/products", data),
         onSuccess: () => {
             toast({ title: "تم إنشاء المنتج بنجاح" });
             queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
@@ -88,7 +226,7 @@ export default function ProductDetails() {
     });
 
     const updateMutation = useMutation({
-        mutationFn: (data: InsertProduct) =>
+        mutationFn: (data: any) =>
             apiRequest("PATCH", `/api/admin/products/${productId}`, data),
         onSuccess: () => {
             toast({ title: "تم تحديث المنتج بنجاح" });
@@ -102,26 +240,197 @@ export default function ProductDetails() {
         },
     });
 
-    const onSubmit = (data: InsertProduct) => {
+    const onSubmit = (data: any) => {
+        form.clearErrors();
+        const images = Array.isArray(data.images) ? data.images : [];
+        const normalizedGroups = variantGroups
+            .map((group) => ({
+                ...group,
+                name: group.name.trim(),
+                values: group.values.map((value) => value.trim()).filter(Boolean),
+            }))
+            .filter((group) => group.name.length > 0);
+        const variantOptionNames = normalizedGroups.map((group) => group.name);
+        const nextGeneratedVariants = normalizeVariantRows(normalizedGroups, generatedVariants)
+            .filter((variant) => !deletedVariantKeys.includes(variant.key));
+
+        if (!data.title?.trim()) {
+            form.setError("title", { type: "manual", message: "اسم المنتج مطلوب" });
+            toast({ title: "الرجاء إدخال اسم المنتج", variant: "destructive" });
+            return;
+        }
+
+        if (!data.sku?.trim()) {
+            form.setError("sku", { type: "manual", message: "SKU مطلوب" });
+            toast({ title: "الرجاء إدخال SKU", variant: "destructive" });
+            return;
+        }
+
+        if (!data.category) {
+            form.setError("category", { type: "manual", message: "التصنيف مطلوب" });
+            toast({ title: "الرجاء اختيار التصنيف", variant: "destructive" });
+            return;
+        }
+
+        if (images.length === 0) {
+            form.setError("images", { type: "manual", message: "أضف صورة واحدة على الأقل" });
+            toast({ title: "يجب إضافة صورة واحدة على الأقل", variant: "destructive" });
+            return;
+        }
+
+        const primaryImagesCount = images.filter((img: any) => !!img?.isPrimary).length;
+        if (primaryImagesCount !== 1) {
+            form.setError("images", { type: "manual", message: "يجب اختيار صورة رئيسية واحدة فقط" });
+            toast({ title: "يجب اختيار صورة رئيسية واحدة فقط", variant: "destructive" });
+            return;
+        }
+
+        if (data.hasVariants && normalizedGroups.length === 0) {
+            form.setError("variantOptions", { type: "manual", message: "أضف خيار متغير واحد على الأقل" });
+            toast({ title: "أضف خيار متغير واحد على الأقل", description: "مثل size أو color", variant: "destructive" });
+            return;
+        }
+
+        if (data.hasVariants) {
+            if (normalizedGroups.some((group) => group.values.length === 0)) {
+                form.setError("variantOptions", { type: "manual", message: "أضف قيمة واحدة على الأقل لكل خيار" });
+                toast({ title: "أضف قيمة واحدة على الأقل لكل خيار", variant: "destructive" });
+                return;
+            }
+
+            if (nextGeneratedVariants.length === 0) {
+                form.setError("variants", { type: "manual", message: "أضف متغير واحد على الأقل" });
+                toast({ title: "يجب إضافة متغير واحد على الأقل", variant: "destructive" });
+                return;
+            }
+        }
+
+        const categoryIdNum = Number(data.category);
+        const variants = nextGeneratedVariants.map((variant: VariantRow, index: number) => {
+            return {
+                sku: variant.sku,
+                attributes: variant.attributes,
+                priceOverride: Number(variant.priceOverride || 0),
+                stock: Number(variant.stock || 0),
+                isActive: variant.isActive !== false,
+                sortOrder: index,
+            };
+        });
+
+        const payload: any = {
+            ...data,
+            slug: data.slug || slugify(data.title || ""),
+            isFeatured: !!data.isFeatured,
+            category: Number.isNaN(categoryIdNum)
+                ? { id: data.category }
+                : { id: categoryIdNum },
+            images: (data.images || []).map((img: any, index: number) => ({
+                url: img.url,
+                isPrimary: !!img.isPrimary,
+                sortOrder: Number(img.sortOrder ?? index),
+            })),
+            variantOptions: variantOptionNames,
+            variants,
+        };
+
+        if (data.hasVariants) {
+            syncGeneratedRows(nextGeneratedVariants, variantOptionNames);
+        }
+
         if (isEditing) {
-            updateMutation.mutate(data);
+            updateMutation.mutate(payload);
         } else {
-            createMutation.mutate(data);
+            createMutation.mutate(payload);
         }
     };
 
     const isSaving = createMutation.isPending || updateMutation.isPending;
+    const hasVariants = form.watch("hasVariants");
     const { fields: tierFields, append: appendTier, remove: removeTier } = useFieldArray({
         control: form.control,
         name: "pricingTiers",
     });
+
+    const syncGeneratedRows = (rows: VariantRow[], optionNames: string[]) => {
+        setGeneratedVariants(rows);
+        form.setValue("variantOptions", optionNames, { shouldDirty: true, shouldValidate: true });
+        form.setValue("variants", rows, { shouldDirty: true, shouldValidate: true });
+    };
+
+    const handleGenerateVariants = () => {
+        const normalizedGroups = variantGroups
+            .map((group) => ({
+                ...group,
+                name: group.name.trim(),
+                values: group.values.map((value) => value.trim()).filter(Boolean),
+            }))
+            .filter((group) => group.name.length > 0);
+
+        if (normalizedGroups.length === 0) {
+            form.setError("variantOptions", { type: "manual", message: "أضف خيار متغير واحد على الأقل" });
+            toast({ title: "أضف خيار متغير واحد على الأقل", variant: "destructive" });
+            return;
+        }
+
+        if (normalizedGroups.some((group) => group.values.length === 0)) {
+            form.setError("variantOptions", { type: "manual", message: "أضف قيمة واحدة على الأقل لكل خيار" });
+            toast({ title: "أضف قيمة واحدة على الأقل لكل خيار", variant: "destructive" });
+            return;
+        }
+
+        const rows = normalizeVariantRows(normalizedGroups, generatedVariants)
+            .filter((variant) => !deletedVariantKeys.includes(variant.key));
+        syncGeneratedRows(rows, normalizedGroups.map((group) => group.name));
+    };
+
+    const handleUpdateVariantRow = (key: string, patch: Partial<VariantRow>) => {
+        const rows = generatedVariants.map((row) => (row.key === key ? { ...row, ...patch } : row));
+        syncGeneratedRows(rows, variantGroups.map((group) => group.name));
+    };
+
+    const handleAddVariantGroup = () => {
+        setVariantGroups((prev) => [...prev, createVariantGroup()]);
+    };
+
+    const handleRemoveVariantGroup = (groupId: string) => {
+        setVariantGroups((prev) => prev.filter((group) => group.id !== groupId));
+        setVariantValueDrafts((prev) => {
+            const next = { ...prev };
+            delete next[groupId];
+            return next;
+        });
+    };
+
+    const handleAddVariantValue = (groupId: string) => {
+        const draft = (variantValueDrafts[groupId] || "").trim();
+        if (!draft) return;
+
+        setVariantGroups((prev) => prev.map((group) =>
+            group.id === groupId && !group.values.includes(draft)
+                ? { ...group, values: [...group.values, draft] }
+                : group
+        ));
+        setVariantValueDrafts((prev) => ({ ...prev, [groupId]: "" }));
+    };
+
+    const handleRemoveVariantValue = (groupId: string, value: string) => {
+        setVariantGroups((prev) => prev.map((group) =>
+            group.id === groupId
+                ? { ...group, values: group.values.filter((item) => item !== value) }
+                : group
+        ));
+    };
+
+    const handleUpdateVariantGroup = (groupId: string, patch: Partial<VariantOptionGroup>) => {
+        setVariantGroups((prev) => prev.map((group) => (group.id === groupId ? { ...group, ...patch } : group)));
+    };
 
     if (isEditing && isLoadingProduct) {
         return <div className="p-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></div>;
     }
 
     return (
-        <div className="space-y-6 max-w-5xl mx-auto pb-10" dir="ltr">
+        <div className="space-y-6 max-w-5xl mx-auto pb-10" dir="rtl">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -200,12 +509,34 @@ export default function ProductDetails() {
                                         />
                                         <FormField
                                             control={form.control}
+                                            name="slug"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="block text-right">Slug</FormLabel>
+                                                    <FormControl>
+                                                        <Input dir="ltr" placeholder="saffron-musk" {...field} value={field.value ?? ""} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
                                             name="category"
                                             render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel className="block text-right">التصنيف</FormLabel>
                                                     <FormControl>
-                                                        <Input dir="rtl" placeholder="إلكترونيات، ملابس..." {...field} />
+                                                        <select
+                                                            value={field.value || ""}
+                                                            onChange={(e) => field.onChange(e.target.value)}
+                                                            className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                                        >
+                                                            <option value="" disabled>اختر التصنيف</option>
+                                                            {categories.map((cat) => (
+                                                                <option key={cat.id} value={String(cat.id)}>{cat.name}</option>
+                                                            ))}
+                                                        </select>
                                                     </FormControl>
                                                     <FormMessage />
                                                 </FormItem>
@@ -229,6 +560,22 @@ export default function ProductDetails() {
                                                         checked={field.value === "active"}
                                                         onCheckedChange={(checked) => field.onChange(checked ? "active" : "draft")}
                                                     />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    <FormField
+                                        control={form.control}
+                                        name="isFeatured"
+                                        render={({ field }) => (
+                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                                <div className="space-y-0.5">
+                                                    <FormLabel className="text-base">منتج مميز</FormLabel>
+                                                    <FormDescription>إظهار المنتج ضمن العروض/المنتجات المميزة</FormDescription>
+                                                </div>
+                                                <FormControl>
+                                                    <Switch checked={!!field.value} onCheckedChange={field.onChange} />
                                                 </FormControl>
                                             </FormItem>
                                         )}
@@ -533,6 +880,7 @@ export default function ProductDetails() {
                             <Card>
                                 <CardHeader>
                                     <CardTitle>خيارات المنتج</CardTitle>
+                                    <p className="text-sm text-muted-foreground">أضف أسماء الخيارات وقيمها أولاً، ثم ستتولد التركيبات تلقائياً.</p>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     <FormField
@@ -557,9 +905,167 @@ export default function ProductDetails() {
                                     />
 
                                     {form.watch("hasVariants") && (
-                                        <div className="p-4 bg-muted/50 rounded text-center">
-                                            <p className="text-muted-foreground">إدارة الخيارات متقدمة - سيتم إضافتها في النسخة القادمة.</p>
-                                            {/* Here users would add options and generate variants. For simplicity, we can skip elaborate generator logic for now or stick to simple inputs */}
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                                <div>
+                                                    <h4 className="text-sm font-semibold">بنية المتغيرات</h4>
+                                                    <p className="text-xs text-muted-foreground">أضف اسم كل خيار وقيمه، ثم ستتولد التركيبات تلقائياً.</p>
+                                                </div>
+                                                <Button type="button" variant="outline" onClick={handleAddVariantGroup}>
+                                                    <Plus className="w-4 h-4 ml-2" /> إضافة خيار
+                                                </Button>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                {variantGroups.map((group) => (
+                                                    <div key={group.id} className="rounded-2xl border p-4 space-y-4 bg-background">
+                                                        <div className="grid gap-3 md:grid-cols-[1fr_auto] items-start">
+                                                            <FormItem>
+                                                                <FormLabel className="text-xs">Variation Name</FormLabel>
+                                                                <FormControl>
+                                                                <Input
+                                                                        placeholder="اللون"
+                                                                        value={group.name}
+                                                                        onChange={(e) => handleUpdateVariantGroup(group.id, { name: e.target.value })}
+                                                                    />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                            <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveVariantGroup(group.id)} className="mt-6">
+                                                                <Trash2 className="w-4 h-4 text-destructive" />
+                                                            </Button>
+                                                        </div>
+
+                                                        <div className="space-y-2">
+                                                            <FormLabel className="text-xs">القيم</FormLabel>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {group.values.map((value) => (
+                                                                    <span key={value} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-sm">
+                                                                        {value}
+                                                                        <button
+                                                                            type="button"
+                                                                            className="text-muted-foreground hover:text-foreground"
+                                                                            onClick={() => handleRemoveVariantValue(group.id, value)}
+                                                                        >
+                                                                            ×
+                                                                        </button>
+                                                                    </span>
+                                                                ))}
+                                                                <Input
+                                                                    value={variantValueDrafts[group.id] || ""}
+                                                                    onChange={(e) => setVariantValueDrafts((prev) => ({ ...prev, [group.id]: e.target.value }))}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === "Enter") {
+                                                                            e.preventDefault();
+                                                                            handleAddVariantValue(group.id);
+                                                                        }
+                                                                    }}
+                                                                    placeholder="أضف قيمة..."
+                                                                    className="min-w-[180px] flex-1"
+                                                                />
+                                                                <Button type="button" variant="outline" onClick={() => handleAddVariantValue(group.id)}>
+                                                                    إضافة قيمة
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {form.formState.errors.variantOptions?.message && (
+                                                <p className="text-sm font-medium text-destructive">
+                                                    {String(form.formState.errors.variantOptions.message)}
+                                                </p>
+                                            )}
+
+                                            <div className="rounded-2xl border p-4 space-y-4">
+                                                <div className="flex items-center justify-between gap-3 flex-wrap">
+                                                    <div>
+                                                        <h4 className="text-sm font-semibold">SKU المولدة</h4>
+                                                        <p className="text-xs text-muted-foreground">عدّل تفاصيل كل تركيبة بعد توليدها.</p>
+                                                    </div>
+                                                    <Button type="button" onClick={handleGenerateVariants}>
+                                                        <Plus className="w-4 h-4 ml-2" /> توليد التركيبات
+                                                    </Button>
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    {generatedVariants.map((variant) => (
+                                                        <div key={variant.key} className="grid gap-3 rounded-xl border p-3 md:grid-cols-[1fr_220px_120px_120px_120px_56px] md:items-center">
+                                                            <div className="space-y-2">
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {Object.entries(variant.attributes).map(([key, value]) => (
+                                                                        <Badge key={`${variant.key}-${key}`} variant="secondary" className="text-[10px] uppercase">
+                                                                            {value}
+                                                                        </Badge>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground break-all">{variant.key}</div>
+                                                            </div>
+                                                            <FormItem>
+                                                                <FormLabel className="text-xs">SKU</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        value={variant.sku}
+                                                                        onChange={(e) => handleUpdateVariantRow(variant.key, { sku: e.target.value })}
+                                                                        placeholder="ISB-GRY-MAT"
+                                                                    />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                            <FormItem>
+                                                                <FormLabel className="text-xs">سعر مخصص</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={variant.priceOverride}
+                                                                        onChange={(e) => handleUpdateVariantRow(variant.key, { priceOverride: parseFloat(e.target.value) || 0 })}
+                                                                    />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                            <FormItem>
+                                                                <FormLabel className="text-xs">المخزون</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={variant.stock}
+                                                                        onChange={(e) => handleUpdateVariantRow(variant.key, { stock: parseInt(e.target.value) || 0 })}
+                                                                    />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                            <div className="flex items-center gap-2">
+                                                                <Switch
+                                                                    checked={variant.isActive}
+                                                                    onCheckedChange={(checked) => handleUpdateVariantRow(variant.key, { isActive: checked })}
+                                                                />
+                                                                <span className="text-sm">نشط</span>
+                                                            </div>
+                                                            <div className="flex items-center justify-end gap-3">
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => {
+                                                                        setDeletedVariantKeys((prev) => prev.includes(variant.key) ? prev : [...prev, variant.key]);
+                                                                        setGeneratedVariants((prev) => {
+                                                                            const next = prev.filter((row) => row.key !== variant.key);
+                                                                            form.setValue("variants", next, { shouldDirty: true, shouldValidate: true });
+                                                                            return next;
+                                                                        });
+                                                                    }}
+                                                                    title="حذف التركيبة"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4 text-destructive" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {form.formState.errors.variants?.message && (
+                                                    <p className="text-sm font-medium text-destructive">
+                                                        {String(form.formState.errors.variants.message)}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </CardContent>

@@ -47,8 +47,9 @@ export default function OrderSheet() {
     mutationFn: async (data: {
       productId: string | number;
       variant: string;
+      variantId?: string | number | null;
       quantity: number;
-      items: { productId: string | number; qty: number }[];
+      items: { productId: string | number; variantId?: string | number | null; qty: number }[];
       customerName: string;
       customerPhone: string;
       customerAddress: string;
@@ -70,8 +71,8 @@ export default function OrderSheet() {
   // Normalize both old and new product schemas
   const p = orderProduct as any;
   const productImage = p.images?.find((img: any) => img?.isPrimary)?.url || p.images?.[0]?.url || p.image || "";
-  const productPrice = p.pricing?.price ?? p.price ?? 0;
-  const productStock = p.inventory?.stockTotal ?? p.stock ?? 0;
+  const productPrice = p.selectedVariantPrice ?? p.pricing?.price ?? p.price ?? 0;
+  const productStock = p.selectedVariantStock ?? p.inventory?.stockTotal ?? p.stock ?? 0;
   const productColors: { name: string }[] = p.variants?.colors
     ?? (p.variants ?? []).filter((v: any) => v.attributes?.color).map((v: any) => ({ name: v.attributes.color }));
   const productSizes: string[] = p.variants?.sizes
@@ -219,12 +220,13 @@ export default function OrderSheet() {
   };
 
   const handleConfirmOrder = () => {
-    orderMutation.mutate(
+      orderMutation.mutate(
       {
         productId: orderProduct.id,
+        variantId: p.selectedVariantId ?? null,
         variant: `${selectedColor}${selectedSize ? " - " + selectedSize : ""}`,
         quantity,
-        items: [{ productId: orderProduct.id, qty: quantity }],
+        items: [{ productId: orderProduct.id, variantId: p.selectedVariantId ?? null, qty: quantity }],
         customerName: customerName,
         customerPhone: customerPhone,
         customerAddress: store.customerAddress,
