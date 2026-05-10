@@ -19,7 +19,7 @@ import { useEffect, useState } from "react";
 export default function ProductDetail() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
-  const { openOrderSheet, addToCart, setChatProductContext } = useFahd();
+  const { addToCart, setChatProductContext } = useFahd();
   const { toast } = useToast();
   const [selectedColor, setSelectedColor] = useState(0);
   const [selectedSize, setSelectedSize] = useState(0);
@@ -180,6 +180,17 @@ export default function ProductDetail() {
       product: product,
       autoMessage: message,
       image: displayImage,
+      forceAutoSend: true,
+    });
+    navigate("/chat");
+  };
+
+  const handleOrderNow = () => {
+    setChatProductContext({
+      product,
+      autoMessage: `أريد طلب المنتج رقم تعريفه ${product.id}`,
+      image: displayImage,
+      forceAutoSend: true,
     });
     navigate("/chat");
   };
@@ -567,24 +578,7 @@ export default function ProductDetail() {
           </Button>
             <Button
               className="flex-1 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-bold text-base gap-2 min-h-[48px]"
-            onClick={() => {
-              if (variantOptionNames.length > 0 && !selectedVariant) {
-                toast({ title: "اختر الخيارات أولاً", variant: "destructive" });
-                return;
-              }
-
-              const orderProduct = showTierPricing && activeTier
-                ? { ...product, pricing: { ...product.pricing, price: activeTier.finalPrice, compareAt: activeTier.originalPrice } }
-                : product;
-
-              openOrderSheet({
-                ...orderProduct,
-                selectedVariantId: selectedVariant?.id ?? null,
-                selectedVariantLabel: variantOptionNames.length > 0 ? Object.values(selectedVariant?.attributes || {}).join(" - ") : undefined,
-                selectedVariantPrice: selectedVariantPriceOverride || undefined,
-                selectedVariantStock: selectedVariant?.stock || undefined,
-              } as any, { quantity: orderQuantity });
-            }}
+            onClick={handleOrderNow}
               data-testid="button-order-now"
             >
             اطلب الآن - {formatPrice(totalPrice)}

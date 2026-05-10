@@ -45,6 +45,7 @@ export interface ChatProductContext {
   product: Product;
   autoMessage: string;
   image: string;
+  forceAutoSend?: boolean;
 }
 
 interface FahdStore {

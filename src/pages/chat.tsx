@@ -626,7 +626,8 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!chatProductContext || autoMessageSent || !isReady || messages.length > 0) return;
+    if (!chatProductContext || autoMessageSent || !isReady) return;
+    if (messages.length > 0 && !chatProductContext.forceAutoSend) return;
 
     setAutoMessageSent(true);
     setShowWelcome(false);
