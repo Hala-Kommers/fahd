@@ -72,11 +72,12 @@ export default function ProductDetail() {
   const activeTier = hasTiers ? pricingTiers[selectedTierIdx] : null;
   const displayPrice = activeTier ? activeTier.finalPrice : (product.pricing?.price ?? product.price ?? 0);
   const displayOldPrice = activeTier ? activeTier.originalPrice : (product.pricing?.compareAt ?? product.oldPrice ?? null);
-  const displayStock = product.inventory?.stockTotal ?? product.stock ?? 0;
+  const displayStock = product.stockTotal ?? product.inventory?.stockTotal ?? product.stock ?? 0;
   const displayRating = product.rating ?? 0;
   const displayFaq: { question: string; answer: string }[] = product.faq ?? [];
   const displayBadges: string[] = product.badges ?? [];
   const displaySpecs: { key: string; value: string }[] = product.specs ?? [];
+  const displayUsageInstructions = product.usageInstructions ?? "";
 
   const colors: { name: string; value: string }[] =
     product.variants?.colors ??
@@ -331,6 +332,16 @@ export default function ProductDetail() {
                 {warrantyContent}
               </AccordionContent>
             </AccordionItem>
+            {displayUsageInstructions && (
+              <AccordionItem value="usage-instructions">
+                <AccordionTrigger className="text-sm font-semibold" data-testid="accordion-usage-instructions">
+                  طريقة الاستخدام
+                </AccordionTrigger>
+                <AccordionContent className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
+                  {displayUsageInstructions}
+                </AccordionContent>
+              </AccordionItem>
+            )}
           </Accordion>
 
           {displayFaq.length > 0 && (

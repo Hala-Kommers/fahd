@@ -65,6 +65,7 @@ export default function ChatPage() {
       if (!conversationId) throw new Error("No conversation ID");
       const res = await apiRequest("POST", "/api/chat/message", {
         conversationId,
+        message: text,
         text,
         sender: "user"
       });

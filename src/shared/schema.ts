@@ -76,6 +76,7 @@ export type UpdateProduct = z.infer<typeof updateProductSchema>;
 
 export const categorySchema = z.object({
   id: z.string(),
+  slug: z.string().optional(),
   name: z.string(),
   icon: z.string(),
   count: z.number(),

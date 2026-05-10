@@ -18,7 +18,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const { toast } = useToast();
 
   const p = product as any;
-  const displayImage = p.images?.find((img: any) => img?.isPrimary)?.url || p.images?.[0]?.url || p.image || "";
+  const displayImage = p.primaryImage || p.images?.find((img: any) => img?.isPrimary)?.url || p.images?.[0]?.url || p.image || "";
   const displayPrice = p.pricing?.price ?? p.price ?? 0;
   const displayOldPrice = p.pricing?.compareAt ?? p.oldPrice ?? null;
   const firstColor = p.variants?.colors?.[0]?.name

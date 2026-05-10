@@ -48,9 +48,12 @@ export default function OrderSheet() {
       productId: string | number;
       variant: string;
       quantity: number;
+      items: { productId: string | number; qty: number }[];
       customerName: string;
       customerPhone: string;
       customerAddress: string;
+      addressRaw: string;
+      addressCity: string;
       paymentMethod: string;
     }) => {
       const res = await apiRequest("POST", "/api/orders", data);
@@ -221,9 +224,12 @@ export default function OrderSheet() {
         productId: orderProduct.id,
         variant: `${selectedColor}${selectedSize ? " - " + selectedSize : ""}`,
         quantity,
+        items: [{ productId: orderProduct.id, qty: quantity }],
         customerName: customerName,
         customerPhone: customerPhone,
         customerAddress: store.customerAddress,
+        addressRaw: store.customerAddress,
+        addressCity: store.customerAddress.split(",")[0]?.trim() || "",
         paymentMethod: store.paymentMethod,
       },
       {

@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, setAuthTokens } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
 export interface AdminUser {
@@ -28,11 +28,13 @@ export function useLogin() {
   return useMutation({
     mutationFn: async ({ username, password }: { username: string; password: string }) => {
       const res = await apiRequest("POST", "/api/auth/login", { username, password });
-      if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.message || "فشل تسجيل الدخول");
+      const body = await res.json();
+      const accessToken = body?.accessToken ?? body?.tokens?.accessToken;
+      const refreshToken = body?.refreshToken ?? body?.tokens?.refreshToken;
+      if (accessToken) {
+        setAuthTokens(accessToken, refreshToken);
       }
-      return res.json();
+      return body;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
@@ -45,9 +47,11 @@ export function useLogout() {
   const [, navigate] = useLocation();
   return useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/auth/logout", {});
+      const refreshToken = localStorage.getItem("fahd_refresh_token");
+      await apiRequest("POST", "/api/auth/logout", refreshToken ? { refreshToken } : {});
     },
     onSuccess: () => {
+      setAuthTokens(null, null);
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       queryClient.clear();
       navigate("/admin/login");

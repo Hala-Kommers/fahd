@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import type { Product } from "@shared/schema";
 
 export interface ChatMessage {
@@ -82,6 +82,7 @@ interface FahdStore {
 }
 
 const FahdContext = createContext<FahdStore | null>(null);
+const CART_STORAGE_KEY = "fahd_cart_items";
 
 export function useFahd() {
   const ctx = useContext(FahdContext);
@@ -105,13 +106,26 @@ export function FahdProvider({ children }: { children: ReactNode }) {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
-  const [cartItems, setCartItems] = useState<CartItemData[]>([]);
+  const [cartItems, setCartItems] = useState<CartItemData[]>(() => {
+    try {
+      const raw = localStorage.getItem(CART_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; type: "percentage" | "fixed"; value: number } | null>(null);
   const [chatProductContext, setChatProductContext] = useState<ChatProductContext | null>(null);
 
   const clearChatProductContext = useCallback(() => {
     setChatProductContext(null);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
+  }, [cartItems]);
 
   const openOrderSheet = useCallback((product: Product) => {
     setOrderProduct(product);
@@ -221,15 +235,17 @@ export function FahdProvider({ children }: { children: ReactNode }) {
 
   const getCartDiscount = useCallback(() => {
     if (!appliedCoupon) return 0;
+    const couponValue = Number(appliedCoupon.value);
+    if (Number.isNaN(couponValue)) return 0;
     const total = cartItems.reduce((sum, item) => {
       const p = item.product as any;
       const price = p.pricing?.price ?? p.price ?? 0;
       return sum + price * item.quantity;
     }, 0);
     if (appliedCoupon.type === "percentage") {
-      return Math.round(total * (appliedCoupon.value / 100));
+      return Math.round(total * (couponValue / 100));
     }
-    return appliedCoupon.value;
+    return couponValue;
   }, [cartItems, appliedCoupon]);
 
   const resetOrder = useCallback(() => {

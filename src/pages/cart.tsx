@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useFahd } from "@/lib/fahd-store";
 import { formatPrice } from "@/lib/mockData";
+import { useToast } from "@/hooks/use-toast";
 import Header from "@/components/Header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,6 @@ import {
   Trash2,
   ShoppingBag,
   Tag,
-  Truck,
   CheckCircle2,
   Loader2,
   X,
@@ -24,8 +24,35 @@ import {
 
 type CheckoutStep = "cart" | "info" | "payment" | "success";
 
+function normalizeCoupon(
+  payload: any,
+): { code: string; type: "percentage" | "fixed"; value: number } | null {
+  const source = payload?.coupon ?? payload?.data ?? payload;
+  const code = source?.code;
+  const rawType = String(
+    source?.type || source?.discountType || "",
+  ).toLowerCase();
+  const value = Number(
+    source?.value ?? source?.discount ?? source?.discountValue,
+  );
+  if (!code || Number.isNaN(value)) return null;
+
+  const type: "percentage" | "fixed" = rawType.includes("percent")
+    ? "percentage"
+    : "fixed";
+  return { code: String(code), type, value };
+}
+
+function normalizeCreatedOrder(payload: any): { orderNumber: string } | null {
+  const source = payload?.data ?? payload;
+  const orderNumber = source?.orderNumber;
+  if (!orderNumber) return null;
+  return { orderNumber: String(orderNumber) };
+}
+
 export default function CartPage() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const {
     cartItems,
     updateCartQuantity,
@@ -44,20 +71,29 @@ export default function CartPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
-  const [orderResult, setOrderResult] = useState<{ orderNumber: string } | null>(null);
+  const [orderResult, setOrderResult] = useState<{
+    orderNumber: string;
+  } | null>(null);
 
   const subtotal = getCartTotal();
   const discount = getCartDiscount();
-  const shipping = subtotal > 200 ? 0 : 25;
-  const total = subtotal - discount + shipping;
+  const total = subtotal - discount;
 
   const couponMutation = useMutation({
     mutationFn: async (code: string) => {
-      const res = await apiRequest("POST", "/api/coupons/validate", { code });
+      const res = await apiRequest("POST", "/api/coupons/validate", {
+        code,
+        subtotal,
+      });
       return res.json();
     },
     onSuccess: (data: any) => {
-      setAppliedCoupon({ code: data.code, type: data.type, value: data.value });
+      const normalizedCoupon = normalizeCoupon(data);
+      if (!normalizedCoupon) {
+        setCouponError("صيغة استجابة الكوبون غير متوقعة");
+        return;
+      }
+      setAppliedCoupon(normalizedCoupon);
       setCouponError("");
       setCouponInput("");
     },
@@ -72,9 +108,24 @@ export default function CartPage() {
       return res.json();
     },
     onSuccess: (data: any) => {
-      setOrderResult(data);
+      const normalizedOrder = normalizeCreatedOrder(data);
+      if (!normalizedOrder) {
+        toast({
+          title: "تم إنشاء الطلب",
+          description: "لكن رقم الطلب غير متوفر في الاستجابة",
+        });
+        return;
+      }
+      setOrderResult(normalizedOrder);
       setStep("success");
       clearCart();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "فشل إنشاء الطلب",
+        description: error?.message || "حدث خطأ غير متوقع",
+        variant: "destructive",
+      });
     },
   });
 
@@ -84,7 +135,12 @@ export default function CartPage() {
   };
 
   const handleSubmitInfo = () => {
-    if (!customerName.trim() || !customerPhone.trim() || !customerAddress.trim()) return;
+    if (
+      !customerName.trim() ||
+      !customerPhone.trim() ||
+      !customerAddress.trim()
+    )
+      return;
     setStep("payment");
   };
 
@@ -98,11 +154,15 @@ export default function CartPage() {
       customerName,
       customerPhone,
       customerAddress,
+      addressRaw: customerAddress,
+      addressCity: customerAddress.split(",")[0]?.trim() || "",
+      customerEmail: "",
       paymentMethod,
       couponCode: appliedCoupon?.code,
       totalAmount: total,
       items: cartItems.map((item) => ({
         productId: item.product.id,
+        qty: item.quantity,
         quantity: item.quantity,
         color: item.color || undefined,
         size: item.size || undefined,
@@ -118,14 +178,25 @@ export default function CartPage() {
           <div className="w-24 h-24 rounded-full bg-[#CDEB63]/20 flex items-center justify-center">
             <CheckCircle2 className="w-12 h-12 text-[#8ab525]" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground" data-testid="text-order-success">
+          <h1
+            className="text-2xl font-bold text-foreground"
+            data-testid="text-order-success"
+          >
             تم الطلب يا بطل! 🎉
           </h1>
           <div className="space-y-2">
             <p className="text-muted-foreground">
-              رقم الطلب: <span className="font-bold text-foreground" data-testid="text-order-number">{orderResult.orderNumber}</span>
+              رقم الطلب:{" "}
+              <span
+                className="font-bold text-foreground"
+                data-testid="text-order-number"
+              >
+                {orderResult.orderNumber}
+              </span>
             </p>
-            <p className="text-sm text-muted-foreground">يوصلك خلال 1-3 أيام عمل داخل السعودية إن شاء الله 🚚</p>
+            <p className="text-sm text-muted-foreground">
+              يوصلك خلال 1-3 أيام عمل داخل السعودية إن شاء الله 🚚
+            </p>
           </div>
           <div className="flex gap-3">
             <Button
@@ -160,10 +231,16 @@ export default function CartPage() {
             <ArrowRight className="w-5 h-5" />
           </button>
           <h1 className="text-xl font-bold text-foreground">
-            {step === "cart" ? "سلّتك 🛒" : step === "info" ? "وين نوصّلك؟" : "كيف تبي تدفع؟"}
+            {step === "cart"
+              ? "سلّتك 🛒"
+              : step === "info"
+                ? "وين نوصّلك؟"
+                : "كيف تبي تدفع؟"}
           </h1>
           {step === "cart" && cartItems.length > 0 && (
-            <Badge variant="secondary" className="mr-auto">{cartItems.length}</Badge>
+            <Badge variant="secondary" className="mr-auto">
+              {cartItems.length}
+            </Badge>
           )}
         </div>
 
@@ -174,8 +251,12 @@ export default function CartPage() {
                 <div className="w-20 h-20 rounded-full bg-muted mx-auto flex items-center justify-center">
                   <ShoppingBag className="w-10 h-10 text-muted-foreground" />
                 </div>
-                <h2 className="text-lg font-bold text-foreground">سلّتك فاضية يا صاحبي 😅</h2>
-                <p className="text-sm text-muted-foreground">تصفّح المنتجات وأضف اللي يعجبك!</p>
+                <h2 className="text-lg font-bold text-foreground">
+                  سلّتك فاضية يا صاحبي 😅
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  تصفّح المنتجات وأضف اللي يعجبك!
+                </p>
                 <Button
                   className="rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-semibold min-h-[44px]"
                   onClick={() => navigate("/")}
@@ -195,13 +276,23 @@ export default function CartPage() {
                   >
                     <div className="flex gap-3">
                       <img
-                        src={((item.product as any).images?.find((img: any) => img?.isPrimary)?.url || (item.product as any).images?.[0]?.url || "")}
+                        src={
+                          (item.product as any).primaryImage ||
+                          (item.product as any).images?.find(
+                            (img: any) => img?.isPrimary,
+                          )?.url ||
+                          (item.product as any).images?.[0]?.url ||
+                          (item.product as any).image ||
+                          ""
+                        }
                         alt={item.product.title}
                         className="w-20 h-20 rounded-xl object-cover bg-muted shrink-0"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <h3 className="text-sm font-semibold line-clamp-2">{item.product.title}</h3>
+                          <h3 className="text-sm font-semibold line-clamp-2">
+                            {item.product.title}
+                          </h3>
                           <button
                             onClick={() => removeFromCart(item.product.id)}
                             className="text-muted-foreground shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -212,34 +303,67 @@ export default function CartPage() {
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                           {item.color && (
-                            <Badge variant="outline" className="text-[10px] no-default-hover-elevate">{item.color}</Badge>
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] no-default-hover-elevate"
+                            >
+                              {item.color}
+                            </Badge>
                           )}
                           {item.size && (
-                            <Badge variant="outline" className="text-[10px] no-default-hover-elevate">{item.size}</Badge>
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] no-default-hover-elevate"
+                            >
+                              {item.size}
+                            </Badge>
                           )}
                         </div>
                         <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
                           <span className="font-bold text-sm">
-                            {formatPrice(((item.product as any).pricing?.price ?? (item.product as any).price ?? 0) * item.quantity)}
+                            {formatPrice(
+                              ((item.product as any).pricing?.price ??
+                                (item.product as any).price ??
+                                0) * item.quantity,
+                            )}
                           </span>
                           <div className="flex items-center gap-2">
                             <Button
                               variant="outline"
                               size="icon"
                               className="h-8 w-8 min-h-[44px] min-w-[44px]"
-                              onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
+                              onClick={() =>
+                                updateCartQuantity(
+                                  item.product.id,
+                                  item.quantity - 1,
+                                )
+                              }
                               data-testid={`button-qty-minus-${item.product.id}`}
                             >
                               <Minus className="w-3 h-3" />
                             </Button>
-                            <span className="text-sm font-bold min-w-[1.5rem] text-center" data-testid={`text-qty-${item.product.id}`}>
+                            <span
+                              className="text-sm font-bold min-w-[1.5rem] text-center"
+                              data-testid={`text-qty-${item.product.id}`}
+                            >
                               {item.quantity}
                             </span>
                             <Button
                               variant="outline"
                               size="icon"
                               className="h-8 w-8 min-h-[44px] min-w-[44px]"
-                              onClick={() => updateCartQuantity(item.product.id, Math.min((item.product as any).inventory?.stockTotal ?? (item.product as any).stock ?? 999, item.quantity + 1))}
+                              onClick={() =>
+                                updateCartQuantity(
+                                  item.product.id,
+                                  Math.min(
+                                    (item.product as any).inventory
+                                      ?.stockTotal ??
+                                      (item.product as any).stock ??
+                                      999,
+                                    item.quantity + 1,
+                                  ),
+                                )
+                              }
                               data-testid={`button-qty-plus-${item.product.id}`}
                             >
                               <Plus className="w-3 h-3" />
@@ -251,7 +375,10 @@ export default function CartPage() {
                   </Card>
                 ))}
 
-                <Card className="rounded-xl p-4 border-card-border animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
+                <Card
+                  className="rounded-xl p-4 border-card-border animate-fade-in-up"
+                  style={{ animationDelay: "0.2s" }}
+                >
                   <div className="flex items-center gap-2 mb-3">
                     <Tag className="w-4 h-4 text-[#8ab525]" />
                     <span className="text-sm font-semibold">عندك كوبون؟</span>
@@ -260,9 +387,15 @@ export default function CartPage() {
                     <div className="flex items-center justify-between bg-[#CDEB63]/10 rounded-lg px-3 py-2">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-[#8ab525]" />
-                        <span className="text-sm font-medium">{appliedCoupon.code}</span>
+                        <span className="text-sm font-medium">
+                          {appliedCoupon.code}
+                        </span>
                         <span className="text-xs text-muted-foreground">
-                          ({appliedCoupon.type === "percentage" ? `${appliedCoupon.value}%` : formatPrice(appliedCoupon.value)} خصم)
+                          (
+                          {appliedCoupon.type === "percentage"
+                            ? `${appliedCoupon.value}%`
+                            : formatPrice(appliedCoupon.value)}{" "}
+                          خصم)
                         </span>
                       </div>
                       <button
@@ -277,24 +410,38 @@ export default function CartPage() {
                     <div className="flex gap-2">
                       <Input
                         value={couponInput}
-                        onChange={(e) => { setCouponInput(e.target.value); setCouponError(""); }}
+                        onChange={(e) => {
+                          setCouponInput(e.target.value);
+                          setCouponError("");
+                        }}
                         placeholder="حط كود الخصم هنا..."
                         className="flex-1 rounded-lg min-h-[44px]"
                         data-testid="input-coupon"
                       />
                       <Button
                         variant="outline"
-                        onClick={() => couponInput && couponMutation.mutate(couponInput)}
+                        onClick={() =>
+                          couponInput && couponMutation.mutate(couponInput)
+                        }
                         disabled={couponMutation.isPending || !couponInput}
                         className="min-h-[44px]"
                         data-testid="button-apply-coupon"
                       >
-                        {couponMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "طبّق"}
+                        {couponMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          "طبّق"
+                        )}
                       </Button>
                     </div>
                   )}
                   {couponError && (
-                    <p className="text-xs text-destructive mt-2" data-testid="text-coupon-error">{couponError}</p>
+                    <p
+                      className="text-xs text-destructive mt-2"
+                      data-testid="text-coupon-error"
+                    >
+                      {couponError}
+                    </p>
                   )}
                 </Card>
               </div>
@@ -306,7 +453,9 @@ export default function CartPage() {
           <div className="space-y-4 animate-fade-in-up">
             <Card className="rounded-xl p-4 border-card-border space-y-4">
               <div>
-                <label className="text-sm font-semibold mb-1.5 block">اسمك الكامل</label>
+                <label className="text-sm font-semibold mb-1.5 block">
+                  اسمك الكامل
+                </label>
                 <Input
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
@@ -316,7 +465,9 @@ export default function CartPage() {
                 />
               </div>
               <div>
-                <label className="text-sm font-semibold mb-1.5 block">رقم الجوال</label>
+                <label className="text-sm font-semibold mb-1.5 block">
+                  رقم الجوال
+                </label>
                 <Input
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
@@ -326,7 +477,9 @@ export default function CartPage() {
                 />
               </div>
               <div>
-                <label className="text-sm font-semibold mb-1.5 block">عنوان التوصيل</label>
+                <label className="text-sm font-semibold mb-1.5 block">
+                  عنوان التوصيل
+                </label>
                 <Input
                   value={customerAddress}
                   onChange={(e) => setCustomerAddress(e.target.value)}
@@ -342,28 +495,44 @@ export default function CartPage() {
         {step === "payment" && (
           <div className="space-y-3 animate-fade-in-up">
             {[
-              { id: "cod", label: "الدفع عند الاستلام", desc: "ادفع كاش لما يوصل طلبك" },
-              { id: "online", label: "دفع أونلاين", desc: "بطاقة ائتمانية / مدى / Apple Pay" },
+              {
+                id: "cod",
+                label: "الدفع عند الاستلام",
+                desc: "ادفع كاش لما يوصل طلبك",
+              },
+              {
+                id: "paymob",
+                label: "دفع أونلاين",
+                desc: "بطاقة ائتمانية / مدى / Apple Pay",
+              },
             ].map((method) => (
               <Card
                 key={method.id}
-                className={`rounded-xl p-4 border-2 cursor-pointer transition-all active:scale-[0.98] ${paymentMethod === method.id
-                  ? "border-[#CDEB63] bg-[#CDEB63]/5"
-                  : "border-card-border"
-                  }`}
+                className={`rounded-xl p-4 border-2 cursor-pointer transition-all active:scale-[0.98] ${
+                  paymentMethod === method.id
+                    ? "border-[#CDEB63] bg-[#CDEB63]/5"
+                    : "border-card-border"
+                }`}
                 onClick={() => setPaymentMethod(method.id)}
                 data-testid={`payment-${method.id}`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === method.id ? "border-[#CDEB63]" : "border-border"
-                    }`}>
+                  <div
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      paymentMethod === method.id
+                        ? "border-[#CDEB63]"
+                        : "border-border"
+                    }`}
+                  >
                     {paymentMethod === method.id && (
                       <div className="w-2.5 h-2.5 rounded-full bg-[#CDEB63]" />
                     )}
                   </div>
                   <div>
                     <p className="text-sm font-semibold">{method.label}</p>
-                    <p className="text-xs text-muted-foreground">{method.desc}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {method.desc}
+                    </p>
                   </div>
                 </div>
               </Card>
@@ -386,16 +555,6 @@ export default function CartPage() {
                   <span>-{formatPrice(discount)}</span>
                 </div>
               )}
-              <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">الشحن</span>
-                <span>{shipping === 0 ? "مجاني 🎉" : formatPrice(shipping)}</span>
-              </div>
-              {shipping === 0 && (
-                <div className="flex items-center gap-1 text-xs text-[#8ab525]">
-                  <Truck className="w-3 h-3" />
-                  <span>شحن مجاني للطلبات فوق 200 ر.س</span>
-                </div>
-              )}
               <div className="flex justify-between gap-2 pt-2 border-t border-border/50">
                 <span className="font-bold">الإجمالي</span>
                 <span className="font-bold text-lg">{formatPrice(total)}</span>
@@ -404,12 +563,17 @@ export default function CartPage() {
             <Button
               className="w-full rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-bold text-base min-h-[48px]"
               onClick={
-                step === "cart" ? handleCheckout :
-                  step === "info" ? handleSubmitInfo :
-                    handleConfirmOrder
+                step === "cart"
+                  ? handleCheckout
+                  : step === "info"
+                    ? handleSubmitInfo
+                    : handleConfirmOrder
               }
               disabled={
-                (step === "info" && (!customerName.trim() || !customerPhone.trim() || !customerAddress.trim())) ||
+                (step === "info" &&
+                  (!customerName.trim() ||
+                    !customerPhone.trim() ||
+                    !customerAddress.trim())) ||
                 (step === "payment" && !paymentMethod) ||
                 orderMutation.isPending
               }

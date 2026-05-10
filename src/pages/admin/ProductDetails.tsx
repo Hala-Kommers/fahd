@@ -61,7 +61,7 @@ export default function ProductDetails() {
     });
 
     const { data: product, isLoading: isLoadingProduct } = useQuery<Product>({
-        queryKey: [`/api/products/${productId}`],
+        queryKey: [`/api/admin/products/${productId}`],
         enabled: !!isEditing && !!productId,
     });
 
@@ -93,6 +93,7 @@ export default function ProductDetails() {
         onSuccess: () => {
             toast({ title: "تم تحديث المنتج بنجاح" });
             queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+            queryClient.invalidateQueries({ queryKey: [`/api/admin/products/${productId}`] });
             queryClient.invalidateQueries({ queryKey: [`/api/products/${productId}`] });
             setLocation("/admin/products");
         },

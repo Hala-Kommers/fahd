@@ -20,20 +20,21 @@ const iconMap: Record<string, any> = {
   Lightbulb,
 };
 
-type SortOption = "popular" | "newest" | "price_asc" | "price_desc" | "rating";
+type SortOption = "price_asc" | "price_desc" | "title_asc" | "updated_desc";
 
 const sortLabels: Record<SortOption, string> = {
-  popular: "الأكثر مبيعاً",
-  newest: "الأحدث",
   price_asc: "السعر: من الأقل",
   price_desc: "السعر: من الأعلى",
-  rating: "الأعلى تقييماً",
+  title_asc: "الاسم: أ-ي",
+  updated_desc: "الأحدث تحديثاً",
 };
+
+type UiCategory = Category & { slug?: string; filterValue: string };
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("الكل");
-  const [sortBy, setSortBy] = useState<SortOption>("popular");
+  const [sortBy, setSortBy] = useState<SortOption>("updated_desc");
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 2000]);
@@ -54,16 +55,23 @@ export default function Home() {
     queryKey: ["/api/categories"],
   });
 
-  const allCategories = [{ id: "الكل", name: "الكل", icon: "LayoutGrid", count: 0 }, ...categories];
+  const allCategories: UiCategory[] = [
+    { id: "all", slug: "all", name: "الكل", icon: "LayoutGrid", count: 0, filterValue: "الكل" },
+    ...categories.map((cat) => ({
+      ...cat,
+      filterValue: cat.slug || cat.id,
+    })),
+  ];
+  const activeCategoryLabel = allCategories.find((cat) => cat.filterValue === activeCategory)?.name || activeCategory;
 
   const clearFilters = () => {
     setActiveCategory("الكل");
-    setSortBy("popular");
+    setSortBy("updated_desc");
     setPriceRange([0, 2000]);
     setSearchQuery("");
   };
 
-  const hasActiveFilters = activeCategory !== "الكل" || sortBy !== "popular" || priceRange[0] > 0 || priceRange[1] < 2000;
+  const hasActiveFilters = activeCategory !== "الكل" || sortBy !== "updated_desc" || priceRange[0] > 0 || priceRange[1] < 2000;
 
   return (
     <div className="min-h-screen bg-background">
@@ -104,17 +112,17 @@ export default function Home() {
           <div className="flex gap-2 min-w-max">
             {allCategories.map((cat, idx) => {
               const IconComp = cat.icon === "LayoutGrid" ? LayoutGrid : iconMap[cat.icon] || LayoutGrid;
-              const isActive = activeCategory === cat.id;
+              const isActive = activeCategory === cat.filterValue;
               return (
                 <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
+                  key={cat.filterValue}
+                  onClick={() => setActiveCategory(cat.filterValue)}
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap min-h-[44px] active:scale-95 ${isActive
                       ? "bg-[#CDEB63] text-[#1a2e05]"
                       : "bg-card border border-card-border text-foreground"
                     }`}
                   style={{ animationDelay: `${idx * 0.04}s` }}
-                  data-testid={`category-${cat.id}`}
+                  data-testid={`category-${cat.filterValue}`}
                 >
                   <IconComp className="w-4 h-4" />
                   <span>{cat.name}</span>
@@ -132,7 +140,7 @@ export default function Home() {
         <div id="products-grid">
           <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
             <h2 className="text-lg font-bold text-foreground">
-              {searchQuery ? `نتائج البحث "${searchQuery}"` : activeCategory !== "الكل" ? activeCategory : "المنتجات"}
+              {searchQuery ? `نتائج البحث "${searchQuery}"` : activeCategory !== "الكل" ? activeCategoryLabel : "المنتجات"}
               {!isLoading && (
                 <span className="text-sm font-normal text-muted-foreground mr-2">
                   ({products.length})
