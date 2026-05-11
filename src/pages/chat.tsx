@@ -46,7 +46,8 @@ interface AddressFormPayload {
   customerName: string;
   customerPhone: string;
   addressRaw: string;
-  city: string;
+  cityId: number;
+  cityName: string;
   paymentMethod: string;
 }
 
@@ -234,7 +235,7 @@ function buildAddressMessage(payload: AddressFormPayload) {
     `الاسم: ${payload.customerName}`,
     `الجوال: ${payload.customerPhone}`,
     `العنوان: ${payload.addressRaw}`,
-    `المدينة: ${payload.city}`,
+    `المدينة: ${payload.cityName}`,
     `طريقة الدفع: ${payload.paymentMethod}`,
   ].join("\n");
 }
@@ -258,8 +259,16 @@ function AddressFormCard({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [addressRaw, setAddressRaw] = useState("");
-  const [city, setCity] = useState("");
+  const [cityId, setCityId] = useState<number | "">(cities[0]?.id ?? "");
   const [paymentMethod, setPaymentMethod] = useState("COD");
+
+  useEffect(() => {
+    if (cityId === "" && cities.length > 0) {
+      setCityId(cities[0].id);
+    }
+  }, [cities, cityId]);
+
+  const selectedCity = cities.find((city) => city.id === cityId) || null;
 
   return (
     <div className="rounded-2xl border border-border/60 bg-background/80 p-3 space-y-3">
@@ -273,14 +282,22 @@ function AddressFormCard({
       </div>
       <Textarea value={addressRaw} onChange={(e) => setAddressRaw(e.target.value)} placeholder="العنوان الكامل" disabled={disabled} className="min-h-20 rounded-xl resize-none" />
       <div className="grid gap-2 sm:grid-cols-2">
-        <Input
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          placeholder={cities.length ? "اختر أو اكتب المدينة" : "المدينة"}
-          list="chat-cities"
-          disabled={disabled}
-          className="rounded-xl"
-        />
+        <select
+          value={cityId}
+          onChange={(e) => setCityId(Number(e.target.value))}
+          disabled={disabled || cities.length === 0}
+          className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none"
+          data-testid="select-chat-city"
+        >
+          <option value="" disabled>
+            {cities.length ? "اختر المدينة" : "لا توجد مدن"}
+          </option>
+          {cities.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
         <select
           value={paymentMethod}
           onChange={(e) => setPaymentMethod(e.target.value)}
@@ -291,16 +308,11 @@ function AddressFormCard({
           <option value="Paymob">Paymob</option>
         </select>
       </div>
-      <datalist id="chat-cities">
-        {cities.map((option) => (
-          <option key={option.id} value={option.name} />
-        ))}
-      </datalist>
       <Button
         type="button"
         className="w-full rounded-xl bg-[#CDEB63] text-[#1a2e05] hover:bg-[#bddf52]"
-        disabled={disabled || !customerName.trim() || !customerPhone.trim() || !addressRaw.trim() || !city.trim()}
-        onClick={() => onSubmit({ customerName, customerPhone, addressRaw, city, paymentMethod })}
+        disabled={disabled || !customerName.trim() || !customerPhone.trim() || !addressRaw.trim() || cityId === ""}
+        onClick={() => selectedCity && onSubmit({ customerName, customerPhone, addressRaw, cityId: selectedCity.id, cityName: selectedCity.name, paymentMethod })}
       >
         إرسال البيانات
       </Button>
@@ -655,7 +667,7 @@ export default function ChatPage() {
     };
   }, []);
 
-  const sendMessage = useCallback((textOverride?: string) => {
+  const sendMessage = useCallback((textOverride?: string, extraContext?: Record<string, unknown>) => {
     const text = (textOverride || inputText).trim();
     if (!text || !isReady || !isHistoryLoaded || isTyping) return;
 
@@ -666,11 +678,16 @@ export default function ChatPage() {
     sendSocketData({
       type: "message",
       content: text,
-      ...(chatProductContext
+      ...(chatProductContext || extraContext
         ? {
             context: {
-              productId: chatProductContext.productId,
-              ...(chatProductContext.variantId != null ? { variantId: chatProductContext.variantId } : {}),
+              ...(chatProductContext
+                ? {
+                    productId: chatProductContext.productId,
+                    ...(chatProductContext.variantId != null ? { variantId: chatProductContext.variantId } : {}),
+                  }
+                : {}),
+              ...extraContext,
             },
           }
         : {}),
@@ -687,7 +704,7 @@ export default function ChatPage() {
   };
 
   const handleAddressSubmit = (payload: AddressFormPayload) => {
-    sendMessage(buildAddressMessage(payload));
+    sendMessage(buildAddressMessage(payload), { cityId: payload.cityId });
   };
 
   const hasProductContext = !!chatProductContext;
