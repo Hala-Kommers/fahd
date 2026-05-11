@@ -466,12 +466,18 @@ export async function mockApiRequest(method: string, endpoint: string, body?: un
 
   if (method === "GET" && url.pathname === "/api/admin/ai/stats") {
     return jsonResponse({
-      ordersStarted: 124,
-      ordersCompleted: 81,
+      window: "7d",
+      totalMessages: 840,
+      userMessages: 512,
+      fahdMessages: 328,
+      conversations: conversations.size || 30,
+      chatOrders: 81,
       conversionRate: 65.3,
-      avgReplyTimeMs: 820,
-      handoffRate: 12.4,
-      topIntents: ["best", "price", "shipping"],
+      topTools: [
+        { name: "search_products", count: 124 },
+        { name: "get_product_details", count: 98 },
+        { name: "create_order", count: 81 },
+      ],
     });
   }
 

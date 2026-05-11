@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Search, MessageSquare, Clock, User, Smile, Frown, Meh, BarChart3, GripVertical, ShoppingCart, Package, Phone, MapPin, CreditCard, Tag, CheckCircle2, Circle } from "lucide-react";
 import type { Conversation, Message } from "@shared/schema";
+import { mockQuery } from "@/lib/mock-api";
 
 interface ToolCallEntry {
     name: string;
@@ -175,11 +176,13 @@ export default function ChatsPage() {
 
     const { data: conversations = [], isLoading } = useQuery<Conversation[]>({
         queryKey: ["/api/admin/conversations"],
+        queryFn: () => mockQuery("/api/admin/conversations"),
         refetchInterval: 5000, // Real-time ish
     });
 
     const { data: selectedChat } = useQuery<Conversation & { messages: Message[] }>({
         queryKey: ["/api/admin/conversations", selectedId],
+        queryFn: () => mockQuery(`/api/admin/conversations/${selectedId}`),
         enabled: !!selectedId,
         refetchInterval: 3000,
     });

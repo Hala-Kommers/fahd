@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Loader2, Plus, Trash2, Save, FileText, HelpCircle, Pencil } from "lucid
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Policy, GlobalFaq } from "@shared/schema";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { mockApiRequest, mockQuery } from "@/lib/mock-api";
 
 export default function PoliciesPage() {
     return (
@@ -41,12 +42,15 @@ export default function PoliciesPage() {
 
 function PoliciesTab() {
     const { toast } = useToast();
-    const { data: policies, isLoading } = useQuery<Policy[]>({ queryKey: ["/api/admin/policies"] });
+    const { data: policies, isLoading } = useQuery<Policy[]>({
+        queryKey: ["/api/admin/policies"],
+        queryFn: () => mockQuery("/api/admin/policies"),
+    });
     const [editingPolicy, setEditingPolicy] = useState<Policy | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
     const createMutation = useMutation({
-        mutationFn: (newPolicy: Policy) => apiRequest("POST", "/api/admin/policies", newPolicy),
+        mutationFn: (newPolicy: Policy) => mockApiRequest("POST", "/api/admin/policies", newPolicy),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/admin/policies"] });
             toast({ title: "تم إضافة السياسة بنجاح" });
@@ -56,7 +60,7 @@ function PoliciesTab() {
     });
 
     const updateMutation = useMutation({
-        mutationFn: (policy: Policy) => apiRequest("PATCH", `/api/admin/policies/${policy.id}`, policy),
+        mutationFn: (policy: Policy) => mockApiRequest("PATCH", `/api/admin/policies/${policy.id}`, policy),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/admin/policies"] });
             toast({ title: "تم تحديث السياسة بنجاح" });
@@ -66,7 +70,7 @@ function PoliciesTab() {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id: string) => apiRequest("DELETE", `/api/admin/policies/${id}`),
+        mutationFn: (id: string) => mockApiRequest("DELETE", `/api/admin/policies/${id}`),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/admin/policies"] });
             toast({ title: "تم حذف السياسة" });
@@ -169,7 +173,10 @@ function PoliciesTab() {
 
 function GlobalFaqTab() {
     const { toast } = useToast();
-    const { data: faq, isLoading } = useQuery<GlobalFaq>({ queryKey: ["/api/admin/faq"] });
+    const { data: faq, isLoading } = useQuery<GlobalFaq>({
+        queryKey: ["/api/admin/faq"],
+        queryFn: () => mockQuery("/api/admin/faq"),
+    });
 
     // Local state for editing items before saving to server
     const [items, setItems] = useState<{ q: string, a: string }[]>([]);
@@ -182,7 +189,7 @@ function GlobalFaqTab() {
     // Or just use effect to sync once
     // A better approach for simple lists:
     const updateMutation = useMutation({
-        mutationFn: (newFaq: GlobalFaq) => apiRequest("PATCH", "/api/admin/faq", newFaq),
+        mutationFn: (newFaq: GlobalFaq) => mockApiRequest("PATCH", "/api/admin/faq", newFaq),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/admin/faq"] });
             toast({ title: "تم حفظ الأسئلة الشائعة" });

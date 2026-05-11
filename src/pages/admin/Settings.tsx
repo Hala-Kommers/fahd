@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Save, Loader2, Bot, MessageSquare, ShieldCheck, FileText, Settings2, Zap, CheckCircle2, XCircle } from "lucide-react";
 import type { BotConfig } from "@shared/schema";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { mockApiRequest, mockQuery } from "@/lib/mock-api";
 
 const OPENROUTER_MODELS = [
     { label: "Gemini 2.0 Flash", value: "google/gemini-2.0-flash-001" },
@@ -31,7 +32,8 @@ export default function BotSettingsPage() {
     const [testReply, setTestReply] = useState("");
 
     const { data: serverConfig, isLoading } = useQuery<BotConfig>({
-        queryKey: ["/api/admin/bot/config"],
+      queryKey: ["/api/admin/bot/config"],
+      queryFn: () => mockQuery("/api/admin/bot/config"),
     });
 
     useEffect(() => {
@@ -41,8 +43,8 @@ export default function BotSettingsPage() {
     }, [serverConfig]);
 
     const updateMutation = useMutation({
-        mutationFn: (newConfig: Partial<BotConfig>) =>
-            apiRequest("PATCH", "/api/admin/bot/config", newConfig),
+      mutationFn: (newConfig: Partial<BotConfig>) =>
+            mockApiRequest("PATCH", "/api/admin/bot/config", newConfig),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["/api/admin/bot/config"] });
             toast({ title: "تم حفظ إعدادات البوت بنجاح" });
@@ -63,7 +65,7 @@ export default function BotSettingsPage() {
         setTestStatus("loading");
         setTestReply("");
         try {
-            const res = await apiRequest("POST", "/api/admin/bot/test-connection", {
+            const res = await mockApiRequest("POST", "/api/admin/bot/test-connection", {
                 apiKey: config.apiKey,
                 model: config.model,
             });

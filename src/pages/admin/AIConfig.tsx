@@ -14,6 +14,7 @@ import { Switch as SwitchUI } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Save, Play, RotateCcw, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { mockQuery } from "@/lib/mock-api";
 
 const AIConfigPage = () => {
     return (
@@ -87,7 +88,8 @@ const TOOL_LABELS: Record<string, string> = {
 
 const UsageStats = () => {
     const { data: stats, isLoading } = useQuery<AIStatsResponse>({
-        queryKey: ["/api/admin/ai/stats"],
+      queryKey: ["/api/admin/ai/stats"],
+      queryFn: () => mockQuery("/api/admin/ai/stats"),
     });
 
     if (isLoading || !stats) {
