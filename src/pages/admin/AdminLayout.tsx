@@ -1,4 +1,5 @@
 
+import { useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import {
   Sidebar,
@@ -49,6 +50,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3.5rem",
   };
+
+  useEffect(() => {
+    const previousDir = document.documentElement.dir;
+    document.documentElement.dir = "rtl";
+    document.body.dir = "rtl";
+
+    return () => {
+      document.documentElement.dir = previousDir || "ltr";
+      document.body.dir = previousDir || "ltr";
+    };
+  }, []);
 
   return (
     <SidebarProvider style={style as React.CSSProperties} defaultOpen={true}>
