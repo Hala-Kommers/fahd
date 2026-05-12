@@ -88,43 +88,23 @@ const coupons = {
 
 let adminLoggedIn = false;
 
-const botConfig: BotConfig = {
-  id: "bot_config_main",
+let botApiKey = "mock-key";
+const botConfig = {
+  id: 1,
   provider: "google",
-  model: "google/gemini-2.0-flash-001",
-  apiKey: "mock-key",
+  model: "gemini-2.0-flash",
+  hasApiKey: true,
   temperature: 0.7,
   maxTokens: 1000,
   enabled: true,
   persona: {
     botName: "فهد",
     tone: "friendly_saudi",
-    style: "balanced",
+    style: "concise",
     language: "ar-SA",
     emojiLevel: "medium",
   },
-  system: {
-    systemPrompt: "ساعد العميل بسرعة وبأسلوب واضح.",
-    allowedSources: ["catalog", "product_faq", "store_policies"],
-    fallbackRule: "اسأل سؤال توضيحي واحد عند الحاجة.",
-    forbiddenClaims: [],
-  },
-  templates: {
-    welcome: "هلا 👋 كيف أقدر أخدمك؟",
-    askVariant: "وش الخيار اللي تفضله؟",
-    askAddress: "اكتب عنوانك بالتفصيل",
-    confirm: "أبشر، نأكد الطلب؟",
-    outOfStock: "للأسف المنتج غير متوفر حالياً",
-    handover: "بحولك لموظف خدمة العملاء",
-  },
-  closing: {
-    requiredFields: ["name", "phone", "address"],
-    paymentMethodsEnabled: ["COD", "Online"],
-    otpMode: "risk_based",
-    showPinLocationButton: "risk_based",
-    addressMinFieldsSA: ["city", "district", "street"],
-    addressConfidenceThresholds: { accept: 80, ask_one_question: 60, require_pin: 40 },
-  },
+  customInstructions: "Some custom instructions here",
 };
 
 const policies: Policy[] = [
@@ -418,16 +398,33 @@ export async function mockApiRequest(method: string, endpoint: string, body?: un
   }
 
   if (method === "GET" && url.pathname === "/api/admin/bot/config") {
-    return jsonResponse(botConfig);
+    return jsonResponse({ data: botConfig });
   }
 
   if (method === "PATCH" && url.pathname === "/api/admin/bot/config") {
-    Object.assign(botConfig, body as Partial<BotConfig>);
-    return jsonResponse(botConfig);
+    const payload = body as Record<string, unknown>;
+    if (Object.prototype.hasOwnProperty.call(payload, "provider") && typeof payload.provider === "string") botConfig.provider = payload.provider;
+    if (Object.prototype.hasOwnProperty.call(payload, "model") && typeof payload.model === "string") botConfig.model = payload.model;
+    if (Object.prototype.hasOwnProperty.call(payload, "temperature")) botConfig.temperature = Number(payload.temperature ?? botConfig.temperature);
+    if (Object.prototype.hasOwnProperty.call(payload, "maxTokens")) botConfig.maxTokens = Number(payload.maxTokens ?? botConfig.maxTokens);
+    if (Object.prototype.hasOwnProperty.call(payload, "enabled")) botConfig.enabled = Boolean(payload.enabled);
+    if (Object.prototype.hasOwnProperty.call(payload, "persona") && payload.persona && typeof payload.persona === "object") {
+      botConfig.persona = { ...botConfig.persona, ...(payload.persona as Record<string, string>) };
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "customInstructions") && typeof payload.customInstructions === "string") {
+      botConfig.customInstructions = payload.customInstructions;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "apiKey")) {
+      const key = payload.apiKey;
+      if (key === "") botApiKey = "";
+      else if (typeof key === "string") botApiKey = key;
+      botConfig.hasApiKey = botApiKey.length > 0;
+    }
+    return jsonResponse({ data: { id: botConfig.id } });
   }
 
   if (method === "POST" && url.pathname === "/api/admin/bot/test-connection") {
-    return jsonResponse({ success: true, reply: "الاتصال ناجح ✅" });
+    return jsonResponse({ data: { ok: botConfig.hasApiKey || botApiKey.length > 0, provider: botConfig.provider } });
   }
 
   if (method === "GET" && url.pathname === "/api/admin/policies") {
