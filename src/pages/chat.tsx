@@ -509,6 +509,7 @@ export default function ChatPage() {
   const readyRef = useRef(false);
   const shouldReconnectRef = useRef(true);
   const typingMessageIdRef = useRef<string | null>(null);
+  const streamingTextRef = useRef("");
   const pendingMessagesRef = useRef<string[]>([]);
   const historyRequestSentRef = useRef(false);
 
@@ -646,9 +647,8 @@ export default function ChatPage() {
       if (data.type === "ai_typing") {
         setIsTyping(true);
         if (!typingMessageIdRef.current) {
-          const messageId = generateId();
-          typingMessageIdRef.current = messageId;
-          setMessages((prev) => [...prev, { id: messageId, sender: "fahd", text: "" }]);
+          typingMessageIdRef.current = generateId();
+          streamingTextRef.current = "";
         }
         return;
       }
@@ -658,44 +658,34 @@ export default function ChatPage() {
       }
 
       if (data.type === "ai_chunk") {
-        if (!typingMessageIdRef.current) {
-          const messageId = generateId();
-          typingMessageIdRef.current = messageId;
-          setMessages((prev) => [...prev, { id: messageId, sender: "fahd", text: String(data.content || "") }]);
-          return;
-        }
-
-        updateMessage(typingMessageIdRef.current, (message) => ({
-          ...message,
-          text: String(data.content || ""),
-        }));
+        if (!typingMessageIdRef.current) typingMessageIdRef.current = generateId();
+        streamingTextRef.current = String(data.content || "");
         return;
       }
 
       if (data.type === "ai_done") {
         const messageId = typingMessageIdRef.current;
-        if (messageId) {
-          updateMessage(messageId, (message) => ({
-            ...message,
-            text: message.text || "تم الرد.",
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: messageId || generateId(),
+            sender: "fahd",
+            text: String(data.content || data.message || streamingTextRef.current || "تم الرد."),
             actions: Array.isArray(data.actions) ? data.actions : [],
             meta: data.meta || null,
-          }));
-        }
+          },
+        ]);
         typingMessageIdRef.current = null;
+        streamingTextRef.current = "";
         setIsTyping(false);
         return;
       }
 
       if (data.type === "ai_error") {
         const messageId = typingMessageIdRef.current;
-        if (messageId) {
-          updateMessage(messageId, (message) => ({
-            ...message,
-            text: "تعذر إكمال الرد الآن. جرّب مرة ثانية.",
-          }));
-        }
+        setMessages((prev) => [...prev, { id: messageId || generateId(), sender: "fahd", text: "تعذر إكمال الرد الآن. جرّب مرة ثانية." }]);
         typingMessageIdRef.current = null;
+        streamingTextRef.current = "";
         setIsTyping(false);
         toast({ title: "صار خطأ في الرد", description: String(data.error || "تعذر التواصل مع المساعد"), variant: "destructive" });
         return;
@@ -918,7 +908,13 @@ export default function ChatPage() {
                         : "bg-[#CDEB63]/20 text-foreground rounded-tl-md whitespace-pre-line"
                         }`}
                     >
-                      {msg.sender === "fahd" ? <MarkdownMessage text={msg.text} /> : msg.text}
+                      {msg.sender === "fahd" ? (
+                        isTyping && msg.id === typingMessageIdRef.current ? (
+                          <div className="whitespace-pre-wrap">{msg.text}</div>
+                        ) : (
+                          <MarkdownMessage text={msg.text} />
+                        )
+                      ) : msg.text}
                     </div>
                     {msg.sender === "fahd" && (
                       <ActionButtons
