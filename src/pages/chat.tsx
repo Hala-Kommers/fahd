@@ -1,6 +1,7 @@
 
 import { useState, useRef, useEffect, useCallback, Fragment, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -339,9 +340,12 @@ function ActionButtons({
         if (action.type === "show_product") {
           const productId = action.payload?.productId;
           return (
-            <Button key={`${action.type}-${idx}`} type="button" variant="outline" size="sm" disabled={disabled || !productId} onClick={() => productId && onOpenProduct(productId)} className="rounded-full">
-              عرض المنتج
-            </Button>
+            <ProductActionCard
+              key={`${action.type}-${idx}`}
+              productId={productId}
+              disabled={disabled}
+              onOpenProduct={onOpenProduct}
+            />
           );
         }
 
@@ -355,6 +359,128 @@ function ActionButtons({
 
         return null;
       })}
+    </div>
+  );
+}
+
+function ProductActionCard({
+  productId,
+  disabled,
+  onOpenProduct,
+}: {
+  productId?: number;
+  disabled: boolean;
+  onOpenProduct: (productId: number) => void;
+}) {
+  const { data: product, isLoading } = useQuery<any>({
+    queryKey: ["/api/products", productId],
+    enabled: !!productId,
+  });
+
+  if (!productId) return null;
+
+  const image = product?.primaryImage
+    || product?.images?.find((img: any) => img?.isPrimary)?.url
+    || product?.images?.[0]?.url
+    || product?.image
+    || "";
+  const title = product?.title || "عرض المنتج";
+  const price = product?.pricing?.price ?? product?.price ?? null;
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onOpenProduct(productId)}
+      className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-2 text-right hover-elevate active:scale-[0.98] transition-transform disabled:opacity-60"
+      data-testid={`button-chat-product-${productId}`}
+    >
+      <div className="flex items-center gap-3">
+        {image ? (
+          <img
+            src={image}
+            alt={title}
+            className="w-16 h-16 rounded-xl object-cover bg-muted shrink-0"
+            data-testid={`img-chat-product-${productId}`}
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-xl bg-muted flex items-center justify-center shrink-0">
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /> : <Package className="w-6 h-6 text-muted-foreground" />}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] text-muted-foreground mb-1">منتج مقترح</p>
+          <h3 className="font-bold text-sm text-foreground line-clamp-2">{title}</h3>
+          {price !== null && <p className="text-xs text-[#6f941e] font-semibold mt-1">{price} ر.س</p>}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function ProductContextCard({
+  context,
+  onChipClick,
+  onClear,
+}: {
+  context: NonNullable<ReturnType<typeof useFahd>["chatProductContext"]>;
+  onChipClick: (chip: string) => void;
+  onClear: () => void;
+}) {
+  const product = context.product as any;
+  const price = product?.pricing?.price ?? product?.price ?? null;
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 pb-3">
+      <div className="rounded-3xl border border-[#CDEB63]/50 bg-card/95 shadow-sm p-3 flex gap-3 items-center animate-fade-in-up">
+        {context.image ? (
+          <img
+            src={context.image}
+            alt={context.product.title}
+            className="w-20 h-20 rounded-2xl object-cover border border-border/50 bg-muted shrink-0"
+            data-testid="img-chat-product-context"
+          />
+        ) : (
+          <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center shrink-0">
+            <Package className="w-8 h-8 text-muted-foreground" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-[#6f941e] mb-0.5">تسأل عن هذا المنتج</p>
+              <h2 className="text-sm font-bold text-foreground truncate" data-testid="text-chat-product-title">
+                {context.product.title}
+              </h2>
+              {price !== null && (
+                <p className="text-xs text-muted-foreground">{price} ر.س</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClear}
+              className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 min-h-[32px] px-2"
+            >
+              إزالة
+            </button>
+          </div>
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+            {productQuickChips.map((chip, idx) => {
+              const testIds = ["features", "shipping", "warranty"];
+              return (
+                <button
+                  key={chip}
+                  onClick={() => onChipClick(chip)}
+                  className="shrink-0 text-xs px-3 py-1.5 rounded-full bg-[#CDEB63]/15 text-foreground border border-[#CDEB63]/40 hover-elevate"
+                  data-testid={`chip-chat-quick-${testIds[idx]}`}
+                >
+                  {chip}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -732,6 +858,13 @@ export default function ChatPage() {
             </div>
           </div>
         </div>
+        {chatProductContext && (
+          <ProductContextCard
+            context={chatProductContext}
+            onChipClick={handleQuickChipClick}
+            onClear={clearChatProductContext}
+          />
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto">
@@ -845,31 +978,6 @@ export default function ChatPage() {
                 <Send className="w-4 h-4" />
               </Button>
             </div>
-          {hasProductContext && (
-            <div className="flex items-center gap-2 overflow-x-auto pt-1 scrollbar-hide">
-              {chatProductContext.image && (
-                <img
-                  src={chatProductContext.image}
-                  alt={chatProductContext.product.title}
-                  className="w-8 h-8 rounded-lg object-cover border border-border/50 shrink-0"
-                  data-testid="img-chat-product-thumb"
-                />
-              )}
-              {productQuickChips.map((chip, idx) => {
-                const testIds = ["features", "shipping", "warranty"];
-                return (
-                  <button
-                    key={chip}
-                    onClick={() => handleQuickChipClick(chip)}
-                    className="shrink-0 text-xs px-3 py-1.5 rounded-full bg-muted text-muted-foreground border border-border/50 hover-elevate"
-                    data-testid={`chip-chat-quick-${testIds[idx]}`}
-                  >
-                    {chip}
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
     </div>
