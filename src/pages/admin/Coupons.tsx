@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Ticket } from "lucide-react";
 import type { Coupon, InsertCoupon } from "@shared/schema";
-import { mockApiRequest, mockQuery } from "@/lib/mock-api";
 
 const emptyCoupon: InsertCoupon = {
   code: "",
@@ -30,6 +29,15 @@ const emptyCoupon: InsertCoupon = {
   value: 0,
   minOrder: 0,
 };
+
+async function readJson<T>(response: Response): Promise<T> {
+  const payload = await response.json();
+  return payload?.data ?? payload;
+}
+
+async function fetchCoupons(): Promise<Coupon[]> {
+  return readJson<Coupon[]>(await apiRequest("GET", "/api/admin/coupons"));
+}
 
 export default function CouponsPage() {
   const { toast } = useToast();
@@ -40,11 +48,11 @@ export default function CouponsPage() {
 
   const { data: couponsList = [], isLoading } = useQuery<Coupon[]>({
     queryKey: ["/api/admin/coupons"],
-    queryFn: () => mockQuery("/api/admin/coupons"),
+    queryFn: fetchCoupons,
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: InsertCoupon) => mockApiRequest("POST", "/api/admin/coupons", data),
+    mutationFn: (data: InsertCoupon) => apiRequest("POST", "/api/admin/coupons", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/coupons"] });
       toast({ title: "تم إضافة الكوبون بنجاح" });
@@ -57,7 +65,7 @@ export default function CouponsPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ code, data }: { code: string; data: Partial<InsertCoupon> }) =>
-      mockApiRequest("PATCH", `/api/admin/coupons/${code}`, data),
+      apiRequest("PATCH", `/api/admin/coupons/${code}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/coupons"] });
       toast({ title: "تم تحديث الكوبون بنجاح" });
@@ -66,7 +74,7 @@ export default function CouponsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (code: string) => mockApiRequest("DELETE", `/api/admin/coupons/${code}`),
+    mutationFn: (code: string) => apiRequest("DELETE", `/api/admin/coupons/${code}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/coupons"] });
       toast({ title: "تم حذف الكوبون" });

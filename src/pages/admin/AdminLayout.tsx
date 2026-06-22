@@ -1,6 +1,7 @@
 
 import { useEffect } from "react";
 import { useLocation, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   Sidebar,
   SidebarContent,
@@ -21,7 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAdminStore } from "@/lib/admin-store";
+import { apiRequest } from "@/lib/queryClient";
 import { useLogout } from "@/hooks/use-auth";
 import { useAdminWebSocket } from "@/hooks/use-ws";
 
@@ -36,8 +37,14 @@ const menuItems = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { orders } = useAdminStore();
-  const newOrdersCount = orders.filter(o => o.status === 'New').length;
+  const { data: newOrdersCount = 0 } = useQuery<number>({
+    queryKey: ["/api/admin/orders", "new-count"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/orders?page=1&limit=1&status=new");
+      const payload = await res.json();
+      return Number(payload?.meta?.total ?? 0);
+    },
+  });
   const logout = useLogout();
   useAdminWebSocket();
 

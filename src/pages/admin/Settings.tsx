@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save, Bot, MessageSquare, KeyRound, SlidersHorizontal, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
+import { Loader2, Save, Bot, MessageSquare, KeyRound, SlidersHorizontal, CheckCircle2, XCircle, ShieldCheck, BarChart3 } from "lucide-react";
 
 const PROVIDERS = [
   { label: "Google", value: "google" },
@@ -45,7 +45,41 @@ type BotConfig = {
   customInstructions: string;
 };
 
+type AIStats = {
+  messages: number;
+  conversations: number;
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    cacheWriteTokens: number;
+    cacheReadTokens: number;
+    reasoningTokens: number;
+  };
+  byProvider: Array<{ provider: string; totalMessages: number; promptTokens: number; completionTokens: number }>;
+  byModel: Array<{ model: string; totalMessages: number; promptTokens: number; completionTokens: number }>;
+  byStatus: Array<{ status: string; totalConversations: number }>;
+};
+
 type ApiKeyMode = "preserve" | "update" | "clear";
+
+function UsageMetrics({ messages, promptTokens, completionTokens }: { messages: number; promptTokens: number; completionTokens: number }) {
+  return (
+    <div className="mt-2 space-y-1 text-muted-foreground">
+      <div className="flex items-center justify-between gap-3">
+        <span>الرسائل</span>
+        <span dir="ltr" className="font-medium tabular-nums">{messages.toLocaleString("ar-SA")}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span dir="ltr">Prompt tokens</span>
+        <span dir="ltr" className="font-medium tabular-nums">{promptTokens.toLocaleString("ar-SA")}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span dir="ltr">Completion tokens</span>
+        <span dir="ltr" className="font-medium tabular-nums">{completionTokens.toLocaleString("ar-SA")}</span>
+      </div>
+    </div>
+  );
+}
 
 const DEFAULT_CONFIG: BotConfig = {
   provider: "google",
@@ -89,6 +123,12 @@ function normalizeConfig(config?: Partial<BotConfig> | null): BotConfig {
   };
 }
 
+async function fetchAIStats(): Promise<AIStats> {
+  const res = await apiRequest("GET", "/api/admin/ai/stats");
+  const payload = await res.json();
+  return payload?.data ?? payload;
+}
+
 export default function BotSettingsPage() {
   const { toast } = useToast();
   const [config, setConfig] = useState<BotConfig | null>(null);
@@ -99,6 +139,11 @@ export default function BotSettingsPage() {
 
   const { data: serverConfig, isLoading } = useQuery<BotConfig>({
     queryKey: ["/api/admin/bot/config"],
+  });
+
+  const { data: aiStats, isLoading: statsLoading } = useQuery<AIStats>({
+    queryKey: ["/api/admin/ai/stats"],
+    queryFn: fetchAIStats,
   });
 
   useEffect(() => {
@@ -192,6 +237,7 @@ export default function BotSettingsPage() {
           <TabsTrigger value="provider" className="gap-2"><SlidersHorizontal className="w-4 h-4" /> الإعدادات</TabsTrigger>
           <TabsTrigger value="persona" className="gap-2"><Bot className="w-4 h-4" /> الشخصية</TabsTrigger>
           <TabsTrigger value="instructions" className="gap-2"><MessageSquare className="w-4 h-4" /> التعليمات</TabsTrigger>
+          <TabsTrigger value="stats" className="gap-2"><BarChart3 className="w-4 h-4" /> الإحصائيات</TabsTrigger>
         </TabsList>
 
         <TabsContent value="provider" className="mt-4 space-y-4">
@@ -382,6 +428,83 @@ export default function BotSettingsPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="stats" className="mt-4 space-y-4">
+          {statsLoading || !aiStats ? (
+            <Card><CardContent className="p-6 text-muted-foreground">جاري تحميل إحصائيات الذكاء الاصطناعي...</CardContent></Card>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-4">
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">الرسائل</CardTitle></CardHeader>
+                  <CardContent><div className="text-2xl font-bold">{aiStats.messages}</div></CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">المحادثات</CardTitle></CardHeader>
+                  <CardContent><div className="text-2xl font-bold">{aiStats.conversations}</div></CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Prompt Tokens</CardTitle></CardHeader>
+                  <CardContent><div className="text-2xl font-bold">{aiStats.usage.promptTokens.toLocaleString("ar-SA")}</div></CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Completion Tokens</CardTitle></CardHeader>
+                  <CardContent><div className="text-2xl font-bold">{aiStats.usage.completionTokens.toLocaleString("ar-SA")}</div></CardContent>
+                </Card>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">حسب المزود</CardTitle>
+                    <CardDescription>استهلاك الرسائل والتوكنز حسب Provider</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {aiStats.byProvider.map((row) => (
+                      <div key={row.provider} className="rounded-lg border p-3 text-sm">
+                        <div className="font-semibold" dir="ltr">{row.provider}</div>
+                        <UsageMetrics messages={row.totalMessages} promptTokens={row.promptTokens} completionTokens={row.completionTokens} />
+                      </div>
+                    ))}
+                    {aiStats.byProvider.length === 0 && <p className="text-sm text-muted-foreground">لا توجد بيانات</p>}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">حسب الموديل</CardTitle>
+                    <CardDescription>تفصيل الاستخدام لكل Model</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {aiStats.byModel.map((row) => (
+                      <div key={row.model} className="rounded-lg border p-3 text-sm">
+                        <div className="font-semibold" dir="ltr">{row.model}</div>
+                        <UsageMetrics messages={row.totalMessages} promptTokens={row.promptTokens} completionTokens={row.completionTokens} />
+                      </div>
+                    ))}
+                    {aiStats.byModel.length === 0 && <p className="text-sm text-muted-foreground">لا توجد بيانات</p>}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">حالة المحادثات</CardTitle>
+                    <CardDescription>عدد المحادثات حسب الحالة</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {aiStats.byStatus.map((row) => (
+                      <div key={row.status} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                        <span className="font-semibold">{row.status}</span>
+                        <Badge variant="secondary">{row.totalConversations}</Badge>
+                      </div>
+                    ))}
+                    {aiStats.byStatus.length === 0 && <p className="text-sm text-muted-foreground">لا توجد بيانات</p>}
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>
