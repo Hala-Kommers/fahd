@@ -97,8 +97,10 @@ export default function Dashboard() {
   });
 
   const recentOrders = recentOrdersData?.data ?? [];
-  const statusCounts = Object.fromEntries((orderAnalytics?.byStatus ?? []).map((row) => [row.status, row.count]));
-  const chartData = salesChart.map((point) => ({
+  const safeByStatus = Array.isArray(orderAnalytics?.byStatus) ? orderAnalytics.byStatus : [];
+  const safeSalesChart = Array.isArray(salesChart) ? salesChart : [];
+  const statusCounts = Object.fromEntries(safeByStatus.map((row) => [row.status, row.count]));
+  const chartData = safeSalesChart.map((point) => ({
     ...point,
     label: format(new Date(point.date), "MM-dd"),
   }));
