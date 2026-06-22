@@ -49,6 +49,8 @@ interface AddressFormPayload {
   addressRaw: string;
   cityId: number;
   cityName: string;
+  addressZone?: string;
+  addressDistrict?: string;
   paymentMethod: string;
 }
 
@@ -236,7 +238,9 @@ function buildAddressMessage(payload: AddressFormPayload) {
     `الاسم: ${payload.customerName}`,
     `الجوال: ${payload.customerPhone}`,
     `العنوان: ${payload.addressRaw}`,
-    `المدينة: ${payload.cityName}`,
+    `المنطقة: ${payload.cityName}`,
+    ...(payload.addressZone ? [`المدينة: ${payload.addressZone}`] : []),
+    ...(payload.addressDistrict ? [`الحي: ${payload.addressDistrict}`] : []),
     `طريقة الدفع: ${payload.paymentMethod}`,
   ].join("\n");
 }
@@ -261,6 +265,8 @@ function AddressFormCard({
   const [customerPhone, setCustomerPhone] = useState("");
   const [addressRaw, setAddressRaw] = useState("");
   const [cityId, setCityId] = useState<number | "">(cities[0]?.id ?? "");
+  const [addressZone, setAddressZone] = useState("");
+  const [addressDistrict, setAddressDistrict] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("COD");
 
   useEffect(() => {
@@ -291,7 +297,7 @@ function AddressFormCard({
           data-testid="select-chat-city"
         >
           <option value="" disabled>
-            {cities.length ? "اختر المدينة" : "لا توجد مدن"}
+            {cities.length ? "اختر المنطقة" : "لا توجد مناطق"}
           </option>
           {cities.map((option) => (
             <option key={option.id} value={option.id}>
@@ -299,6 +305,8 @@ function AddressFormCard({
             </option>
           ))}
         </select>
+        <Input value={addressZone} onChange={(e) => setAddressZone(e.target.value)} placeholder="المدينة" disabled={disabled} className="rounded-xl" />
+        <Input value={addressDistrict} onChange={(e) => setAddressDistrict(e.target.value)} placeholder="الحي" disabled={disabled} className="rounded-xl" />
         <select
           value={paymentMethod}
           onChange={(e) => setPaymentMethod(e.target.value)}
@@ -313,7 +321,16 @@ function AddressFormCard({
         type="button"
         className="w-full rounded-xl bg-[#CDEB63] text-[#1a2e05] hover:bg-[#bddf52]"
         disabled={disabled || !customerName.trim() || !customerPhone.trim() || !addressRaw.trim() || cityId === ""}
-        onClick={() => selectedCity && onSubmit({ customerName, customerPhone, addressRaw, cityId: selectedCity.id, cityName: selectedCity.name, paymentMethod })}
+        onClick={() => selectedCity && onSubmit({
+          customerName,
+          customerPhone,
+          addressRaw,
+          cityId: selectedCity.id,
+          cityName: selectedCity.name,
+          addressZone: addressZone.trim() || undefined,
+          addressDistrict: addressDistrict.trim() || undefined,
+          paymentMethod,
+        })}
       >
         إرسال البيانات
       </Button>

@@ -74,6 +74,8 @@ export default function CartPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [cityId, setCityId] = useState<number | null>(null);
+  const [addressZone, setAddressZone] = useState("");
+  const [addressDistrict, setAddressDistrict] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [orderResult, setOrderResult] = useState<{
     orderNumber: string;
@@ -158,6 +160,7 @@ export default function CartPage() {
   const handleConfirmOrder = () => {
     if (!paymentMethod) return;
     const firstItem = cartItems[0];
+    const normalizedPaymentMethod = paymentMethod === "paymob" ? "Paymob" : "COD";
     orderMutation.mutate({
       productId: firstItem.product.id,
       variantId: firstItem.variantId ?? undefined,
@@ -168,8 +171,10 @@ export default function CartPage() {
       customerAddress,
       addressRaw: customerAddress,
       cityId,
+      addressZone: addressZone.trim() || undefined,
+      addressDistrict: addressDistrict.trim() || undefined,
       customerEmail: "",
-      paymentMethod,
+      paymentMethod: normalizedPaymentMethod,
       couponCode: appliedCoupon?.code,
       totalAmount: total,
       items: cartItems.map((item) => ({
@@ -511,7 +516,7 @@ export default function CartPage() {
               </div>
               <div>
                 <label className="text-sm font-semibold mb-1.5 block">
-                  المدينة
+                  المنطقة
                 </label>
                 <select
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 min-h-[44px]"
@@ -520,13 +525,39 @@ export default function CartPage() {
                   data-testid="select-checkout-city"
                   disabled={citiesLoading}
                 >
-                  <option value="">اختر المدينة</option>
+                  <option value="">اختر المنطقة</option>
                   {activeCities.map((city) => (
                     <option key={city.id} value={city.id}>
                       {city.name}
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-semibold mb-1.5 block">
+                    المدينة
+                  </label>
+                  <Input
+                    value={addressZone}
+                    onChange={(e) => setAddressZone(e.target.value)}
+                    placeholder="مثال: حاسي مسعود"
+                    className="rounded-lg min-h-[44px]"
+                    data-testid="input-checkout-zone"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold mb-1.5 block">
+                    الحي
+                  </label>
+                  <Input
+                    value={addressDistrict}
+                    onChange={(e) => setAddressDistrict(e.target.value)}
+                    placeholder="مثال: حي النصر"
+                    className="rounded-lg min-h-[44px]"
+                    data-testid="input-checkout-district"
+                  />
+                </div>
               </div>
               <div>
                 <label className="text-sm font-semibold mb-1.5 block">
