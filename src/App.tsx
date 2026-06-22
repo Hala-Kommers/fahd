@@ -1,5 +1,4 @@
 import { Switch, Route } from "wouter";
-import PoliciesPage from "@/pages/admin/Policies";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -43,15 +42,10 @@ function Router() {
       <Route path="/admin/orders" component={() => <AdminGuard><AdminLayout><OrdersPage /></AdminLayout></AdminGuard>} />
       <Route path="/admin/orders/:id" component={() => <AdminGuard><AdminLayout><OrderDetails /></AdminLayout></AdminGuard>} />
       <Route path="/admin/coupons" component={() => <AdminGuard><AdminLayout><CouponsPage /></AdminLayout></AdminGuard>} />
-
-      {/* AI & Chat Analysis */}
-      <Route path="/admin/ai" component={() => <AdminGuard><AdminLayout><BotSettings /></AdminLayout></AdminGuard>} />
-      <Route path="/admin/bot" component={() => <AdminGuard><AdminLayout><BotSettings /></AdminLayout></AdminGuard>} />
       <Route path="/admin/chat" component={() => <AdminGuard><AdminLayout><ChatsPage /></AdminLayout></AdminGuard>} />
       <Route path="/admin/settings" component={() => <AdminGuard><AdminLayout><BotSettings /></AdminLayout></AdminGuard>} />
 
       {/* Placeholders */}
-      <Route path="/admin/policies" component={() => <AdminGuard><AdminLayout><PoliciesPage /></AdminLayout></AdminGuard>} />
       <Route path="/admin/anti-fraud" component={() => <AdminGuard><AdminLayout><div className="p-8 text-center text-muted-foreground">مكافحة الفيك أوردر (قريباً)</div></AdminLayout></AdminGuard>} />
       <Route path="/admin/analytics" component={() => <AdminGuard><AdminLayout><div className="p-8 text-center text-muted-foreground">التحليلات (قريباً)</div></AdminLayout></AdminGuard>} />
       <Route path="/admin/integrations" component={() => <AdminGuard><AdminLayout><div className="p-8 text-center text-muted-foreground">التكاملات (قريباً)</div></AdminLayout></AdminGuard>} />

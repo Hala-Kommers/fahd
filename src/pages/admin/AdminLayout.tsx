@@ -16,12 +16,11 @@ import {
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard, ShoppingCart, Package, MessageSquare,
-  Bot, BookOpen, ShieldAlert, BarChart3, Puzzle, Settings,
-  Search, Plus, Download, ArrowRight, LogOut
+  ShieldAlert, BarChart3, Puzzle, Settings, Ticket,
+  Search, Plus, ArrowRight, LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { useAdminStore } from "@/lib/admin-store";
 import { useLogout } from "@/hooks/use-auth";
 import { useAdminWebSocket } from "@/hooks/use-ws";
@@ -30,9 +29,8 @@ const menuItems = [
   { title: "نظرة عامة", href: "/admin", icon: LayoutDashboard },
   { title: "الطلبات", href: "/admin/orders", icon: ShoppingCart, badge: "new" },
   { title: "المنتجات", href: "/admin/products", icon: Package },
+  { title: "الكوبونات", href: "/admin/coupons", icon: Ticket },
   { title: "المحادثات", href: "/admin/chat", icon: MessageSquare },
-  { title: "إعدادات فهد", href: "/admin/bot", icon: Bot },
-  { title: "السياسات والمعرفة", href: "/admin/policies", icon: BookOpen },
   { title: "مكافحة الفيك أوردر", href: "/admin/anti-fraud", icon: ShieldAlert },
   { title: "التحليلات", href: "/admin/analytics", icon: BarChart3 },
   { title: "التكاملات", href: "/admin/integrations", icon: Puzzle },
@@ -134,14 +132,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
 
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="hidden md:flex gap-1.5 py-1.5 px-3 bg-muted/50 border-0">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-xs font-medium">متصل Shopify</span>
-              </Badge>
-              <Button variant="outline" size="sm" className="hidden sm:flex gap-2">
-                <Download className="w-4 h-4" />
-                <span>تصدير</span>
-              </Button>
               <Button
                 variant="ghost"
                 size="sm"
