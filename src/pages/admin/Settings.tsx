@@ -126,7 +126,22 @@ function normalizeConfig(config?: Partial<BotConfig> | null): BotConfig {
 async function fetchAIStats(): Promise<AIStats> {
   const res = await apiRequest("GET", "/api/admin/ai/stats");
   const payload = await res.json();
-  return payload?.data ?? payload;
+  const data = payload?.data ?? payload ?? {};
+
+  return {
+    messages: Number(data.messages ?? 0),
+    conversations: Number(data.conversations ?? 0),
+    usage: {
+      promptTokens: Number(data.usage?.promptTokens ?? 0),
+      completionTokens: Number(data.usage?.completionTokens ?? 0),
+      cacheWriteTokens: Number(data.usage?.cacheWriteTokens ?? 0),
+      cacheReadTokens: Number(data.usage?.cacheReadTokens ?? 0),
+      reasoningTokens: Number(data.usage?.reasoningTokens ?? 0),
+    },
+    byProvider: Array.isArray(data.byProvider) ? data.byProvider : [],
+    byModel: Array.isArray(data.byModel) ? data.byModel : [],
+    byStatus: Array.isArray(data.byStatus) ? data.byStatus : [],
+  };
 }
 
 export default function BotSettingsPage() {
@@ -185,6 +200,9 @@ export default function BotSettingsPage() {
   }, [apiKey, apiKeyMode, config]);
 
   const modelOptions = MODELS_BY_PROVIDER[config?.provider || DEFAULT_CONFIG.provider] || MODELS_BY_PROVIDER.google;
+  const providerStats = Array.isArray(aiStats?.byProvider) ? aiStats.byProvider : [];
+  const modelStats = Array.isArray(aiStats?.byModel) ? aiStats.byModel : [];
+  const statusStats = Array.isArray(aiStats?.byStatus) ? aiStats.byStatus : [];
 
   const handleSave = () => {
     if (!payload) return;
@@ -461,13 +479,13 @@ export default function BotSettingsPage() {
                     <CardDescription>استهلاك الرسائل والتوكنز حسب Provider</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {aiStats.byProvider.map((row) => (
-                      <div key={row.provider} className="rounded-lg border p-3 text-sm">
-                        <div className="font-semibold" dir="ltr">{row.provider}</div>
-                        <UsageMetrics messages={row.totalMessages} promptTokens={row.promptTokens} completionTokens={row.completionTokens} />
-                      </div>
-                    ))}
-                    {aiStats.byProvider.length === 0 && <p className="text-sm text-muted-foreground">لا توجد بيانات</p>}
+                    {providerStats.map((row) => (
+                        <div key={row.provider} className="rounded-lg border p-3 text-sm">
+                          <div className="font-semibold" dir="ltr">{row.provider}</div>
+                          <UsageMetrics messages={row.totalMessages} promptTokens={row.promptTokens} completionTokens={row.completionTokens} />
+                        </div>
+                      ))}
+                    {providerStats.length === 0 && <p className="text-sm text-muted-foreground">لا توجد بيانات</p>}
                   </CardContent>
                 </Card>
 
@@ -477,13 +495,13 @@ export default function BotSettingsPage() {
                     <CardDescription>تفصيل الاستخدام لكل Model</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {aiStats.byModel.map((row) => (
-                      <div key={row.model} className="rounded-lg border p-3 text-sm">
-                        <div className="font-semibold" dir="ltr">{row.model}</div>
-                        <UsageMetrics messages={row.totalMessages} promptTokens={row.promptTokens} completionTokens={row.completionTokens} />
-                      </div>
-                    ))}
-                    {aiStats.byModel.length === 0 && <p className="text-sm text-muted-foreground">لا توجد بيانات</p>}
+                    {modelStats.map((row) => (
+                        <div key={row.model} className="rounded-lg border p-3 text-sm">
+                          <div className="font-semibold" dir="ltr">{row.model}</div>
+                          <UsageMetrics messages={row.totalMessages} promptTokens={row.promptTokens} completionTokens={row.completionTokens} />
+                        </div>
+                      ))}
+                    {modelStats.length === 0 && <p className="text-sm text-muted-foreground">لا توجد بيانات</p>}
                   </CardContent>
                 </Card>
 
@@ -493,13 +511,13 @@ export default function BotSettingsPage() {
                     <CardDescription>عدد المحادثات حسب الحالة</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {aiStats.byStatus.map((row) => (
-                      <div key={row.status} className="flex items-center justify-between rounded-lg border p-3 text-sm">
-                        <span className="font-semibold">{row.status}</span>
-                        <Badge variant="secondary">{row.totalConversations}</Badge>
-                      </div>
-                    ))}
-                    {aiStats.byStatus.length === 0 && <p className="text-sm text-muted-foreground">لا توجد بيانات</p>}
+                    {statusStats.map((row) => (
+                        <div key={row.status} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                          <span className="font-semibold">{row.status}</span>
+                          <Badge variant="secondary">{row.totalConversations}</Badge>
+                        </div>
+                      ))}
+                    {statusStats.length === 0 && <p className="text-sm text-muted-foreground">لا توجد بيانات</p>}
                   </CardContent>
                 </Card>
               </div>
