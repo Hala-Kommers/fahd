@@ -104,6 +104,32 @@ function parseHistoryMessages(messages: Array<{ id: string | number; role: strin
     }));
 }
 
+function getAiEventText(data: any) {
+  const candidates = [
+    data?.content,
+    data?.message,
+    data?.text,
+    data?.reply,
+    data?.answer,
+    data?.data?.content,
+    data?.data?.message,
+    data?.data?.text,
+  ];
+  const value = candidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+  return value ? String(value) : "";
+}
+
+function getAiChunkText(data: any, currentText: string) {
+  const delta = typeof data?.delta === "string" ? data.delta : typeof data?.data?.delta === "string" ? data.data.delta : "";
+  if (delta) return currentText + delta;
+
+  const chunk = typeof data?.chunk === "string" ? data.chunk : typeof data?.data?.chunk === "string" ? data.data.chunk : "";
+  const nextText = chunk || getAiEventText(data);
+  if (!nextText) return currentText;
+  if (!currentText || nextText.startsWith(currentText)) return nextText;
+  return currentText + nextText;
+}
+
 function normalizeText(text: string) {
   return text.replace(/\r\n/g, "\n");
 }
@@ -530,6 +556,7 @@ export default function ChatPage() {
   const streamingTextRef = useRef("");
   const pendingMessagesRef = useRef<string[]>([]);
   const historyRequestSentRef = useRef(false);
+  const pendingFinalHistorySyncRef = useRef(false);
 
   const updateMessage = useCallback((messageId: string, updater: (message: ChatMsg) => ChatMsg) => {
     setMessages((prev) => prev.map((message) => (message.id === messageId ? updater(message) : message)));
@@ -659,6 +686,12 @@ export default function ChatPage() {
         setMessages(historyMessages);
         setShowWelcome(historyMessages.length === 0);
         setIsHistoryLoaded(true);
+        if (pendingFinalHistorySyncRef.current) {
+          pendingFinalHistorySyncRef.current = false;
+          typingMessageIdRef.current = null;
+          streamingTextRef.current = "";
+          setIsTyping(false);
+        }
         return;
       }
 
@@ -677,18 +710,27 @@ export default function ChatPage() {
 
       if (data.type === "ai_chunk") {
         if (!typingMessageIdRef.current) typingMessageIdRef.current = generateId();
-        streamingTextRef.current = String(data.content || "");
+        streamingTextRef.current = getAiChunkText(data, streamingTextRef.current);
         return;
       }
 
       if (data.type === "ai_done") {
         const messageId = typingMessageIdRef.current;
+        const finalText = getAiEventText(data) || streamingTextRef.current;
+
+        if (!finalText) {
+          pendingFinalHistorySyncRef.current = true;
+          historyRequestSentRef.current = false;
+          sendSocketData({ type: "history" });
+          return;
+        }
+
         setMessages((prev) => [
           ...prev,
           {
             id: messageId || generateId(),
             sender: "fahd",
-            text: String(data.content || data.message || streamingTextRef.current || "تم الرد."),
+            text: finalText,
             actions: Array.isArray(data.actions) ? data.actions : [],
             meta: data.meta || null,
           },
