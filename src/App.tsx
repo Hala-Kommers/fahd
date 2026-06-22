@@ -45,11 +45,6 @@ function Router() {
       <Route path="/admin/chat" component={() => <AdminGuard><AdminLayout><ChatsPage /></AdminLayout></AdminGuard>} />
       <Route path="/admin/settings" component={() => <AdminGuard><AdminLayout><BotSettings /></AdminLayout></AdminGuard>} />
 
-      {/* Placeholders */}
-      <Route path="/admin/anti-fraud" component={() => <AdminGuard><AdminLayout><div className="p-8 text-center text-muted-foreground">مكافحة الفيك أوردر (قريباً)</div></AdminLayout></AdminGuard>} />
-      <Route path="/admin/analytics" component={() => <AdminGuard><AdminLayout><div className="p-8 text-center text-muted-foreground">التحليلات (قريباً)</div></AdminLayout></AdminGuard>} />
-      <Route path="/admin/integrations" component={() => <AdminGuard><AdminLayout><div className="p-8 text-center text-muted-foreground">التكاملات (قريباً)</div></AdminLayout></AdminGuard>} />
-
       <Route component={NotFound} />
     </Switch>
   );

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard, ShoppingCart, Package, MessageSquare,
-  ShieldAlert, BarChart3, Puzzle, Settings, Ticket,
+  Settings, Ticket,
   Search, Plus, ArrowRight, LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,9 +31,6 @@ const menuItems = [
   { title: "المنتجات", href: "/admin/products", icon: Package },
   { title: "الكوبونات", href: "/admin/coupons", icon: Ticket },
   { title: "المحادثات", href: "/admin/chat", icon: MessageSquare },
-  { title: "مكافحة الفيك أوردر", href: "/admin/anti-fraud", icon: ShieldAlert },
-  { title: "التحليلات", href: "/admin/analytics", icon: BarChart3 },
-  { title: "التكاملات", href: "/admin/integrations", icon: Puzzle },
   { title: "الإعدادات", href: "/admin/settings", icon: Settings },
 ];
 
