@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useFahd } from "@/lib/fahd-store";
 import { useToast } from "@/hooks/use-toast";
+import { getAnalyticsIdentity } from "@/lib/analytics";
 import {
   ArrowRight,
   Send,
@@ -808,22 +809,20 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, { id: tempId, sender: "user", text }]);
     setInputText("");
     setShowWelcome(false);
+    const analyticsIdentity = getAnalyticsIdentity();
     sendSocketData({
       type: "message",
       content: text,
-      ...(chatProductContext || extraContext
-        ? {
-            context: {
-              ...(chatProductContext
-                ? {
-                    productId: chatProductContext.productId,
-                    ...(chatProductContext.variantId != null ? { variantId: chatProductContext.variantId } : {}),
-                  }
-                : {}),
-              ...extraContext,
-            },
-          }
-        : {}),
+      context: {
+        ...analyticsIdentity,
+        ...(chatProductContext
+          ? {
+              productId: chatProductContext.productId,
+              ...(chatProductContext.variantId != null ? { variantId: chatProductContext.variantId } : {}),
+            }
+          : {}),
+        ...extraContext,
+      },
     });
   }, [chatProductContext, inputText, isReady, isHistoryLoaded, isTyping, sendSocketData]);
 

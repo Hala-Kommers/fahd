@@ -22,6 +22,7 @@ import LoginPage from "@/pages/admin/Login";
 import AdminGuard from "@/components/AdminGuard";
 import OrderTrackingPage from "@/pages/order-tracking";
 import NotFound from "@/pages/not-found";
+import { AnalyticsPageTracker } from "@/lib/analytics";
 
 function Router() {
   return (
@@ -55,6 +56,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <FahdProvider>
+          <AnalyticsPageTracker />
           <Router />
           <OrderSheet />
           <Toaster />

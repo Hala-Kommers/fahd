@@ -83,7 +83,9 @@ export default function ProductsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/analytics/overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/analytics/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/analytics/sales-chart"] });
       toast({ title: "تم حذف المنتج" });
       setDeleteConfirmId(null);
     },

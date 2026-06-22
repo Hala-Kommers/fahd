@@ -23,7 +23,9 @@ export function useAdminWebSocket() {
           const order = data.order;
           // Refresh orders list
           queryClient.invalidateQueries({ queryKey: ["/api/admin/orders"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/analytics/overview"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/analytics/orders"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/analytics/sales-chart"] });
           // Show toast notification
           toast({
             title: "🛍️ طلب جديد!",

@@ -31,6 +31,8 @@ type AdminOrder = {
   paymentMethod: string;
   paymentStatus: string;
   status: OrderStatus;
+  visitorId?: string | null;
+  sessionId?: string | null;
 };
 
 type OrdersResponse = {
@@ -160,14 +162,15 @@ export default function OrdersPage() {
                 <TableHead className="text-right">الإجمالي</TableHead>
                 <TableHead className="text-right">الدفع</TableHead>
                 <TableHead className="text-right">الحالة</TableHead>
+                <TableHead className="text-right">المصدر</TableHead>
                 <TableHead className="text-right">إجراءات</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="h-24 text-center">جاري تحميل الطلبات...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="h-24 text-center">جاري تحميل الطلبات...</TableCell></TableRow>
               ) : orders.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="h-24 text-center">لا توجد طلبات مطابقة</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="h-24 text-center">لا توجد طلبات مطابقة</TableCell></TableRow>
               ) : orders.map((order) => (
                 <TableRow key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={(e) => {
                   if ((e.target as HTMLElement).closest(".no-click")) return;
@@ -185,6 +188,7 @@ export default function OrdersPage() {
                   <TableCell className="font-bold">{formatCurrency(order.total, order.currency)}</TableCell>
                   <TableCell><Badge variant="secondary" className="text-xs">{order.paymentMethod}</Badge></TableCell>
                   <TableCell>{statusBadge(order.status)}</TableCell>
+                  <TableCell><Badge variant="outline" className="text-xs">{order.sessionId ? "Analytics" : "غير مرتبط"}</Badge></TableCell>
                   <TableCell className="no-click"><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setLocation(`/admin/orders/${order.id}`); }}><Eye className="h-4 w-4" /></Button></TableCell>
                 </TableRow>
               ))}

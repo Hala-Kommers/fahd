@@ -52,8 +52,9 @@ async function tryRefreshToken() {
   }
 
   const refreshData = await refreshRes.json();
-  const nextAccessToken = refreshData?.accessToken ?? refreshData?.tokens?.accessToken;
-  const nextRefreshToken = refreshData?.refreshToken ?? refreshData?.tokens?.refreshToken ?? refreshToken;
+  const source = refreshData?.data ?? refreshData;
+  const nextAccessToken = source?.token ?? source?.accessToken ?? source?.tokens?.accessToken;
+  const nextRefreshToken = source?.refreshToken ?? source?.tokens?.refreshToken ?? refreshToken;
   setAuthTokens(nextAccessToken, nextRefreshToken);
   return !!nextAccessToken;
 }

@@ -10,6 +10,7 @@ import { formatPrice } from "@/lib/mockData";
 import { Send, CheckCircle2, MapPin, Package, Truck, ClipboardCheck, Loader2, Copy, MessageCircle } from "lucide-react";
 import type { ChatMessage } from "@/lib/fahd-store";
 import { useLocation } from "wouter";
+import { getAnalyticsIdentity } from "@/lib/analytics";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 9);
@@ -259,6 +260,7 @@ export default function OrderSheet() {
 
     orderMutation.mutate(
       {
+        ...getAnalyticsIdentity(),
         productId: orderProduct.id,
         variantId: p.selectedVariantId ?? null,
         variant: `${selectedColor}${selectedSize ? " - " + selectedSize : ""}`,

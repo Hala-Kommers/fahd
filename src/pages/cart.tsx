@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { getUnitPricingForQuantity } from "@/lib/pricing";
+import { getAnalyticsIdentity } from "@/lib/analytics";
 import {
   ArrowRight,
   Minus,
@@ -161,7 +162,9 @@ export default function CartPage() {
     if (!paymentMethod) return;
     const firstItem = cartItems[0];
     const normalizedPaymentMethod = paymentMethod === "paymob" ? "Paymob" : "COD";
+    const analyticsIdentity = getAnalyticsIdentity();
     orderMutation.mutate({
+      ...analyticsIdentity,
       productId: firstItem.product.id,
       variantId: firstItem.variantId ?? undefined,
       variant: `${firstItem.color}${firstItem.size ? " - " + firstItem.size : ""}`,

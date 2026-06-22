@@ -57,6 +57,8 @@ type OrderDetailsData = {
   addressCity?: string | null;
   addressZone?: string | null;
   addressDistrict?: string | null;
+  visitorId?: string | null;
+  sessionId?: string | null;
   items: OrderItem[];
   conversation?: { id: number; title?: string; status: string; messages?: ConversationMessage[] } | null;
 };
@@ -259,6 +261,12 @@ export default function OrderDetails() {
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               <div>أنشئ: {formatDate(order.createdAt)}</div>
               {order.updatedAt && <div>آخر تحديث: {formatDate(order.updatedAt)}</div>}
+              {(order.visitorId || order.sessionId) && (
+                <div className="rounded-lg border p-2 space-y-1 text-xs" dir="ltr">
+                  {order.visitorId && <div>visitorId: {order.visitorId}</div>}
+                  {order.sessionId && <div>sessionId: {order.sessionId}</div>}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
