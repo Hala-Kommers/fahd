@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback, Fragment, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { ensureChatSession, trackCommerce, attribution } from "@/lib/commerce";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,7 +39,9 @@ interface ChatMsg {
 }
 
 type ChatAction =
-  | { type: "address_form" }
+  | { type: "show_offers" }
+ | { type: "checkout" }
+ | { type: "address_form" }
   | { type: "order_confirmation" }
   | { type: "show_product"; payload?: { productId: number } };
 
@@ -65,7 +68,7 @@ const quickTiles = [
   { label: "قارن بين منتجين 🤔", sendText: "قارن بين منتجين", icon: ArrowLeftRight, category: "compare" },
 ];
 
-const productQuickChips = ["وش يميزه؟", "متى يوصل؟", "الضمان والاستبدال؟"];
+const productQuickChips = ["العروض", "التوصيل", "هل يناسبني؟", "اطلب الآن"];
 const CHAT_SESSION_ID_KEY = "chat_session_id";
 const CHAT_SESSION_TOKEN_KEY = "chat_token";
 const CHAT_MESSAGES_KEY_PREFIX = "chat_messages:";
@@ -536,7 +539,10 @@ export default function ChatPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { chatProductContext, clearChatProductContext } = useFahd();
-  const [offerRequest, setOfferRequest] = useState(0);
+  const [shoppingNeed,setShoppingNeed]=useState("");
+ const [shoppingBudget,setShoppingBudget]=useState("");
+ const [orderRequest,setOrderRequest]=useState(0);
+ const [offerRequest, setOfferRequest] = useState(0);
   const [selectedOffer, setSelectedOffer] = useState<{ quantity: number; requestId: number }>();
   const { data: offerProduct } = useQuery<any>({ queryKey: ["/api/products", String(chatProductContext?.productId || "")], enabled: !!chatProductContext });
   const [connectionStatus, setConnectionStatus] = useState("connecting");
@@ -609,7 +615,8 @@ export default function ChatPage() {
     heartbeatTimerRef.current = null;
   }, []);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
+ try {await ensureChatSession(); sessionIdRef.current=localStorage.getItem(CHAT_SESSION_ID_KEY);tokenRef.current=localStorage.getItem(CHAT_SESSION_TOKEN_KEY);} catch {setConnectionStatus("reconnecting"); reconnectTimerRef.current=window.setTimeout(()=>connect(),3000);return}
     if (!shouldReconnectRef.current) return;
 
     if (reconnectTimerRef.current) {
@@ -716,12 +723,15 @@ export default function ChatPage() {
 
       if (data.type === "ai_chunk") {
         if (!typingMessageIdRef.current) typingMessageIdRef.current = generateId();
-        streamingTextRef.current = getAiChunkText(data, streamingTextRef.current);
+        streamingTextRef.current = getAiEventText(data);
+ const streamedId=typingMessageIdRef.current; const streamedText=streamingTextRef.current;
+ setMessages(prev=>[...prev.filter(m=>m.id!==streamedId),{id:streamedId!,sender:"fahd",text:streamedText}]);
         return;
       }
 
       if (data.type === "ai_done") {
-        const messageId = typingMessageIdRef.current;
+        if(data.actions?.some((a:ChatAction)=>a.type==="checkout"||a.type==="address_form"))setOrderRequest(v=>v+1);
+ const messageId = typingMessageIdRef.current;
         const finalText = getAiEventText(data) || streamingTextRef.current;
 
         if (!finalText) {
@@ -732,7 +742,7 @@ export default function ChatPage() {
         }
 
         setMessages((prev) => [
-          ...prev,
+          ...prev.filter(m=>m.id!==messageId),
           {
             id: messageId || generateId(),
             sender: "fahd",
@@ -749,7 +759,7 @@ export default function ChatPage() {
 
       if (data.type === "ai_error") {
         const messageId = typingMessageIdRef.current;
-        setMessages((prev) => [...prev, { id: messageId || generateId(), sender: "fahd", text: "تعذر إكمال الرد الآن. جرّب مرة ثانية." }]);
+        setMessages((prev) => [...prev.filter(m=>m.id!==messageId), { id: messageId || generateId(), sender: "fahd", text: "تعذر إكمال الرد الآن. تقدر تشوف العروض وتطلب من الأزرار أسفل المحادثة." }]);
         typingMessageIdRef.current = null;
         streamingTextRef.current = "";
         setIsTyping(false);
@@ -851,26 +861,27 @@ export default function ChatPage() {
 
   const sendMessage = useCallback((textOverride?: string, extraContext?: Record<string, unknown>) => {
     const text = (textOverride || inputText).trim();
-    if (text && /عروض|العرض|اوفر|أوفر|offer/i.test(text) && chatProductContext) {
-      setOfferRequest(value => value + 1);
-      setInputText("");
-      return;
-    }
     if (!text || !isReady || !isHistoryLoaded || isTyping) return;
 
     const tempId = generateId();
     setMessages((prev) => [...prev, { id: tempId, sender: "user", text }]);
     setInputText("");
     setShowWelcome(false);
-    const analyticsIdentity = getAnalyticsIdentity();
+    let selection: {quantity?: number; variantId?: string} = {};
+ try { selection = JSON.parse(sessionStorage.getItem(`fahd_selection:${localStorage.getItem("chat_session_id")}:${chatProductContext?.productId}`) || "{}"); } catch {}
+ const analyticsIdentity = getAnalyticsIdentity();
+ trackCommerce("chat_engaged",chatProductContext?.productId);
     sendSocketData({
       type: "message",
       content: text,
       context: {
         ...analyticsIdentity,
+ ...attribution(chatProductContext?.productId),
         ...(chatProductContext
           ? {
               productId: chatProductContext.productId,
+              selectedQuantity: selection.quantity || 1,
+              ...(selection.variantId ? {variantId: Number(selection.variantId)} : {}),
               ...(chatProductContext.variantId != null ? { variantId: chatProductContext.variantId } : {}),
             }
           : {}),
@@ -885,7 +896,8 @@ export default function ChatPage() {
   };
 
   const handleQuickChipClick = (chip: string) => {
-    sendMessage(chip);
+ if(chip==="العروض"){setOfferRequest(v=>v+1);return} if(chip==="اطلب الآن"){setOrderRequest(v=>v+1);return}
+ sendMessage(chip);
   };
 
   const handleAddressSubmit = (payload: AddressFormPayload) => {
@@ -938,14 +950,14 @@ export default function ChatPage() {
                   <span className="text-3xl font-bold text-[#1a2e05]">ف</span>
                 </div>
                 <h2 className="text-2xl font-bold text-foreground mb-2 animate-fade-in-up" style={{ animationDelay: "0.15s" }}>
-                  هلا وغلا! وش أقدر أسوّي لك؟ 👋
+                  {chatProductContext ? `هلا! خلّنا نختار عرض ${chatProductContext.product.title} المناسب لك` : "هلا! وش تحتاج وكم ميزانيتك؟"}
                 </h2>
                 <p className="text-sm text-muted-foreground max-w-sm animate-fade-in" style={{ animationDelay: "0.3s" }}>
-                  اختر من الخيارات تحت أو اكتب لي وأنا بخدمتك
+                  {chatProductContext ? "شوف العروض أو اسألني عن الاستخدام والتوصيل، واطلب مباشرة وقت ما تكون جاهز." : "قل لي استخدامك والميزانية، وأرشّح لك خيارات مناسبة."}
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">{!chatProductContext&&<form className="border rounded-2xl bg-card p-4 space-y-3" onSubmit={e=>{e.preventDefault();sendMessage(`أحتاج ${shoppingNeed} وميزانيتي ${shoppingBudget} ريال`,{need:shoppingNeed,budget:Number(shoppingBudget)})}}><h3 className="font-bold">ساعدني أختار</h3><Input aria-label="احتياجك" placeholder="وش تحتاج؟ لنفسك أو هدية؟" value={shoppingNeed} required maxLength={200} onChange={e=>setShoppingNeed(e.target.value)}/><Input aria-label="ميزانيتك بالريال" type="number" min={1} max={1000000} placeholder="ميزانيتك بالريال" value={shoppingBudget} required onChange={e=>setShoppingBudget(e.target.value)}/><Button className="w-full" disabled={!canSend||isTyping}>رشّح لي ٣ خيارات مناسبة</Button></form>}<div className="grid grid-cols-2 gap-3">
                 {quickTiles.map((tile, idx) => (
                   <button
                     key={tile.label}
@@ -960,7 +972,7 @@ export default function ChatPage() {
                     <span className="text-sm font-semibold text-foreground">{tile.label}</span>
                   </button>
                 ))}
-              </div>
+              </div></div>
             </div>
           )}
 
@@ -988,7 +1000,7 @@ export default function ChatPage() {
                         )
                       ) : msg.text}
                     </div>
-                    {msg.sender === "fahd" && offerProduct && /عروض|العرض|اوفر|أوفر|offer/i.test(msg.text) && (
+                    {msg.sender === "fahd" && offerProduct && msg.actions?.some(a=>a.type==="show_offers") && (
                       <OfferCards product={offerProduct} stock={offerProduct.stockTotal ?? 0} onChoose={quantity => setSelectedOffer({ quantity, requestId: Date.now() })} />
                     )}
                     {msg.sender === "fahd" && (
@@ -1029,7 +1041,7 @@ export default function ChatPage() {
 
       <div className="sticky bottom-0 bg-background/90 backdrop-blur-xl border-t border-border/50 p-3">
         <div className="max-w-2xl mx-auto space-y-2">
-          <ChatProductActions offerRequest={offerRequest} selectedOffer={selectedOffer} />
+          <ChatProductActions orderRequest={orderRequest} offerRequest={offerRequest} selectedOffer={selectedOffer} />
           <div className="flex gap-2">
               <Input
                 value={inputText}

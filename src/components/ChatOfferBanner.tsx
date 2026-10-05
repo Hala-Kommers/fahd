@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { chatCredentials } from "@/lib/commerce";
 import { apiRequest } from "@/lib/queryClient";
 import { motion, useReducedMotion } from "framer-motion";
 import { Clock3, PackageCheck } from "lucide-react";
@@ -16,7 +17,7 @@ export default function ChatOfferBanner({ productId, sessionId }: { productId: n
   const queryClient = useQueryClient();
   const { data: offer } = useQuery<{ available: boolean; endsAt?: string; originalPrice?: number; offerPrice?: number }>({
     queryKey: ["session-offer", sessionId, productId], enabled: !!sessionId,
-    queryFn: async () => { const response = await apiRequest("POST", "/api/offers/session", { sessionId, productId }); return (await response.json()).data; },
+    queryFn: async () => { const response = await apiRequest("POST", "/api/offers/session", { ...chatCredentials(), sessionId, productId }); return (await response.json()).data; },
     staleTime: Infinity,
   });
   const deadline = offer?.endsAt ? Date.parse(offer.endsAt) : null;

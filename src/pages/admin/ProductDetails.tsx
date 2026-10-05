@@ -1,3 +1,4 @@
+import ProductContentEditor from "@/components/ProductContentEditor";
 import { useEffect, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -431,7 +432,8 @@ export default function ProductDetails() {
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto pb-10" dir="rtl">
-            {/* Header */}
+            {isEditing && <ProductContentEditor productId={productId}/>}
+ {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/products")}>

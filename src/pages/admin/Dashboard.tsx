@@ -1,3 +1,5 @@
+import DeliverySettings from "@/components/DeliverySettings";
+import ConversionDashboard from "@/components/ConversionDashboard";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
@@ -116,6 +118,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+ <ConversionDashboard/>
+ <DeliverySettings/>
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {stats.map((stat) => (
           <Card key={stat.label} className="p-4 rounded-xl border-card-border overflow-hidden">

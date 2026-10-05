@@ -22,7 +22,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   const displayImage = p.primaryImage || p.images?.find((img: any) => img?.isPrimary)?.url || p.images?.[0]?.url || p.image || "";
   const displayPrice = p.pricing?.price ?? p.price ?? 0;
   const displayOldPrice = p.pricing?.compareAt ?? p.compareAt ?? p.oldPrice ?? null;
-  const hasVariants = (p.variantOptions?.length ?? 0) > 0 || (p.variants?.length ?? 0) > 0;
+  const hasVariants = p.hasVariants || (p.variantOptions?.length ?? 0) > 0 || (p.variants?.length ?? 0) > 0;
   const firstColor = p.variants?.colors?.[0]?.name
     || (p.variants ?? []).find((v: any) => v.attributes?.color)?.attributes?.color
     || "";
@@ -71,7 +71,7 @@ export default function ProductCard({ product }: ProductCardProps) {
               src={displayImage}
               alt={product.title}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-              loading="lazy"
+              loading="lazy" decoding="async" width={400} height={400}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-4xl text-muted-foreground">📦</div>
@@ -104,13 +104,6 @@ export default function ProductCard({ product }: ProductCardProps) {
           <h3 className="font-semibold text-sm leading-relaxed line-clamp-2 text-foreground mb-1">
             {product.title}
           </h3>
-          <div className="flex items-center gap-1 mb-2">
-            <Star className="w-3.5 h-3.5 fill-[#CDEB63] text-[#CDEB63]" />
-            <span className="text-xs text-muted-foreground">{product.rating}</span>
-            {product.salesCount && product.salesCount > 100 && (
-              <span className="text-[10px] text-muted-foreground">| {product.salesCount}+ مبيع</span>
-            )}
-          </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-base text-foreground">{formatPrice(displayPrice)}</span>
             {displayOldPrice && (
@@ -130,7 +123,7 @@ export default function ProductCard({ product }: ProductCardProps) {
                 productId: Number(product.id),
                 image: displayImage,
               });
-              navigate("/chat");
+              navigate(`/chat/product/${product.id}`);
             }}
             data-testid={`button-order-${product.id}`}
           >
