@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, ExternalLink, MessageCircle } from "lucide-react";
 import { useLocation } from "wouter";
 
 type ProductListStatus = "all" | "active" | "inactive";
@@ -190,7 +190,7 @@ export default function ProductsPage() {
               key={product.id}
               className="rounded-xl border-card-border p-4 hover:bg-accent/5 transition-colors"
             >
-              <div className="flex gap-4 items-center">
+              <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
                 <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/50">
                   {primaryImage ? (
                     <img
@@ -236,7 +236,13 @@ export default function ProductsPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-1 shrink-0">
+                <div className="flex flex-wrap gap-1 shrink-0">
+                  <Button asChild variant="outline" size="sm" className="gap-1 rounded-lg">
+                    <a href={`/product/${product.id}`} target="_blank" rel="noopener noreferrer" aria-label={`صفحة ${product.title}`}><ExternalLink className="h-4 w-4" /><span className="hidden sm:inline">صفحة المنتج</span></a>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="gap-1 rounded-lg text-emerald-700">
+                    <a href={`/chat/product/${product.id}`} target="_blank" rel="noopener noreferrer" aria-label={`شات ${product.title}`}><MessageCircle className="h-4 w-4" /><span className="hidden sm:inline">شات المنتج</span></a>
+                  </Button>
                   <Button
                     size="icon"
                     variant="ghost"

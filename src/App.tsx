@@ -7,6 +7,7 @@ import { FahdProvider } from "@/lib/fahd-store";
 import OrderSheet from "@/components/OrderSheet";
 import Home from "@/pages/home";
 import ProductDetail from "@/pages/product-detail";
+import ProductChatPage from "@/pages/product-chat";
 import ChatPage from "@/pages/chat";
 import CartPage from "@/pages/cart";
 import AdminLayout from "@/pages/admin/AdminLayout";
@@ -29,6 +30,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/product/:id" component={ProductDetail} />
+      <Route path="/chat/product/:id" component={ProductChatPage} />
       <Route path="/chat" component={ChatPage} />
       <Route path="/cart" component={CartPage} />
       <Route path="/order/:id" component={OrderTrackingPage} />

@@ -182,7 +182,7 @@ export default function ProductDetail() {
       variantId: selectedVariant?.id != null ? Number(selectedVariant.id) : null,
       image: displayImage,
     });
-    navigate("/chat");
+    navigate(`/chat/product/${product.id}`);
   };
 
   const handleOrderNow = () => {
@@ -192,7 +192,7 @@ export default function ProductDetail() {
       variantId: selectedVariant?.id != null ? Number(selectedVariant.id) : null,
       image: displayImage,
     });
-    navigate("/chat");
+    navigate(`/chat/product/${product.id}`);
   };
 
   const copyProductId = async () => {

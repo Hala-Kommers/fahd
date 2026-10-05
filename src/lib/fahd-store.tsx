@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import type { Product } from "@shared/schema";
 import { getUnitPricingForQuantity } from "@/lib/pricing";
+import { prepareProductChat } from "@/lib/chat-session";
 
 export interface ChatMessage {
   id: string;
@@ -132,10 +133,15 @@ export function FahdProvider({ children }: { children: ReactNode }) {
     }
   });
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; type: "percentage" | "fixed"; value: number } | null>(null);
-  const [chatProductContext, setChatProductContext] = useState<ChatProductContext | null>(null);
+  const [chatProductContext, updateChatProductContext] = useState<ChatProductContext | null>(null);
+
+  const setChatProductContext = useCallback((context: ChatProductContext | null) => {
+    if (context) prepareProductChat(context.productId);
+    updateChatProductContext(context);
+  }, []);
 
   const clearChatProductContext = useCallback(() => {
-    setChatProductContext(null);
+    updateChatProductContext(null);
   }, []);
 
   useEffect(() => {

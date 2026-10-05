@@ -9,6 +9,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFahd } from "@/lib/fahd-store";
 import { useToast } from "@/hooks/use-toast";
 import { getAnalyticsIdentity } from "@/lib/analytics";
+import ChatProductActions from "@/components/ChatProductActions";
+import OfferCards from "@/components/OfferCards";
+import ChatOfferBanner from "@/components/ChatOfferBanner";
 import {
   ArrowRight,
   Send,
@@ -533,6 +536,9 @@ export default function ChatPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { chatProductContext, clearChatProductContext } = useFahd();
+  const [offerRequest, setOfferRequest] = useState(0);
+  const [selectedOffer, setSelectedOffer] = useState<{ quantity: number; requestId: number }>();
+  const { data: offerProduct } = useQuery<any>({ queryKey: ["/api/products", String(chatProductContext?.productId || "")], enabled: !!chatProductContext });
   const [connectionStatus, setConnectionStatus] = useState("connecting");
   const [cities, setCities] = useState<CityOption[]>([]);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -845,6 +851,11 @@ export default function ChatPage() {
 
   const sendMessage = useCallback((textOverride?: string, extraContext?: Record<string, unknown>) => {
     const text = (textOverride || inputText).trim();
+    if (text && /عروض|العرض|اوفر|أوفر|offer/i.test(text) && chatProductContext) {
+      setOfferRequest(value => value + 1);
+      setInputText("");
+      return;
+    }
     if (!text || !isReady || !isHistoryLoaded || isTyping) return;
 
     const tempId = generateId();
@@ -907,6 +918,9 @@ export default function ChatPage() {
           </div>
         </div>
         {chatProductContext && (
+          <ChatOfferBanner productId={chatProductContext.productId} sessionId={sessionId} />
+        )}
+        {chatProductContext && (
           <ProductContextCard
             context={chatProductContext}
             onChipClick={handleQuickChipClick}
@@ -915,7 +929,7 @@ export default function ChatPage() {
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto saudi-chat-pattern">
         <div className="max-w-2xl mx-auto px-4 py-6">
           {showWelcome && !hasProductContext && (
             <div className="space-y-6 mb-6">
@@ -974,6 +988,9 @@ export default function ChatPage() {
                         )
                       ) : msg.text}
                     </div>
+                    {msg.sender === "fahd" && offerProduct && /عروض|العرض|اوفر|أوفر|offer/i.test(msg.text) && (
+                      <OfferCards product={offerProduct} stock={offerProduct.stockTotal ?? 0} onChoose={quantity => setSelectedOffer({ quantity, requestId: Date.now() })} />
+                    )}
                     {msg.sender === "fahd" && (
                       <ActionButtons
                         actions={msg.actions || []}
@@ -1012,6 +1029,7 @@ export default function ChatPage() {
 
       <div className="sticky bottom-0 bg-background/90 backdrop-blur-xl border-t border-border/50 p-3">
         <div className="max-w-2xl mx-auto space-y-2">
+          <ChatProductActions offerRequest={offerRequest} selectedOffer={selectedOffer} />
           <div className="flex gap-2">
               <Input
                 value={inputText}

@@ -128,7 +128,10 @@ export const getQueryFn: <T>(options: {
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const queryPath = queryKey.join("/") as string;
-    const res = await fetchWithAuth("GET", queryPath);
+    const sessionId = localStorage.getItem("chat_session_id");
+    const sessionPath = /^\/api\/products\/\d+$/.test(queryPath) && sessionId
+      ? `${queryPath}?sessionId=${encodeURIComponent(sessionId)}` : queryPath;
+    const res = await fetchWithAuth("GET", sessionPath);
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;

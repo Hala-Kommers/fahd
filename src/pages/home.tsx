@@ -5,12 +5,16 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MessageCircle, SlidersHorizontal, ChevronDown, X, Headphones, Watch, Gem, Briefcase, Camera, Gamepad2, Lightbulb, LayoutGrid } from "lucide-react";
+import { MessageCircle, SlidersHorizontal, ChevronDown, X, Headphones, Watch, Gem, Briefcase, Camera, Gamepad2, Lightbulb, LayoutGrid, Sparkles, Leaf, Gift, Paintbrush } from "lucide-react";
 import Header from "@/components/Header";
 import ProductCard from "@/components/ProductCard";
 import type { Product, Category } from "@shared/schema";
 
 const iconMap: Record<string, any> = {
+  Sparkles,
+  Leaf,
+  Gift,
+  Paintbrush,
   Headphones,
   Watch,
   Gem,
