@@ -1,3 +1,4 @@
+import VerifiedReviewForm from "@/components/VerifiedReviewForm";
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -14,10 +15,11 @@ interface PublicOrder {
   createdAt: string;
   status: string;
   paymentMethod: string;
+  deliveryEstimate?: string;
   totals: { subtotal: number; shipping: number; discount: number; grandTotal: number; currency: string };
   customer: { name: string; phone: string };
   address: { raw: string; city: string; district?: string; street?: string };
-  items: { title: string; qty: number; unitPrice: number; lineTotal: number; variant?: Record<string, string> }[];
+  items: { productId: number; title: string; qty: number; unitPrice: number; lineTotal: number; variant?: Record<string, string> }[];
 }
 
 const statusSteps = [
@@ -67,6 +69,10 @@ export default function OrderTrackingPage() {
 
   const { data: order, isLoading, isError } = useQuery<PublicOrder>({
     queryKey: [`/api/orders/${params.id}`],
+ queryFn: async()=>{const token=decodeURIComponent(location.hash.slice(1))||sessionStorage.getItem(`order_token:${params.id}`)||"";
+ if(token){sessionStorage.setItem(`order_token:${params.id}`,token);history.replaceState(null,"",location.pathname)}
+ const base=(import.meta.env.VITE_API_BASE_URL||"").replace(/\/$/,"");const r=await fetch(`${base}/api/orders/${params.id}`,{headers:{"X-Order-Token":token}});if(!r.ok)throw new Error("رابط التتبع غير صالح");return (await r.json()).data;},
+ refetchInterval:30000,
     enabled: !!params.id,
     retry: false,
   });
@@ -112,7 +118,8 @@ export default function OrderTrackingPage() {
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
-      {/* Header */}
+      {order.status==="delivered"&&<section className="max-w-2xl mx-auto p-4 space-y-3">{order.items.map(item=><div key={item.productId}><h2 className="font-bold">{item.title}</h2><VerifiedReviewForm orderId={Number(order.id)} productId={item.productId}/></div>)}</section>}
+ {/* Header */}
       <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border/50 px-4 py-3">
         <div className="max-w-2xl mx-auto flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="rounded-full">
@@ -206,7 +213,7 @@ export default function OrderTrackingPage() {
               <span className="text-muted-foreground">طريقة الدفع</span>
               <span className="flex items-center gap-1.5">
                 <CreditCard className="w-3.5 h-3.5" />
-                {order.paymentMethod === "COD" ? "الدفع عند الاستلام" : "دفع إلكتروني"}
+                {order.paymentMethod.toLowerCase() === "cod" ? "الدفع عند الاستلام" : "دفع إلكتروني"}
               </span>
             </div>
           </CardContent>
@@ -283,7 +290,7 @@ export default function OrderTrackingPage() {
               <Clock className="w-5 h-5 text-[#8ab525] flex-shrink-0" />
               <div>
                 <p className="text-sm font-medium">الوقت المتوقع للتوصيل</p>
-                <p className="text-xs text-muted-foreground">1–3 أيام عمل من تاريخ التأكيد</p>
+                <p className="text-xs text-muted-foreground">{order.deliveryEstimate || "سيتم تأكيد موعد التوصيل مع المتجر"}</p>
               </div>
             </CardContent>
           </Card>

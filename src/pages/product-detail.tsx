@@ -147,8 +147,14 @@ export default function ProductDetail() {
     : (activeTier?.qty ?? quantity);
   const totalPrice = displayPrice * orderQuantity;
   const displayStock = selectedVariant?.stock ?? (product.stockTotal ?? product.inventory?.stockTotal ?? product.stock ?? 0);
-  const displayRating = product.rating ?? 0;
-  const displayFaq: { question: string; answer: string }[] = product.faq ?? [];
+  const reviews=product.reviews||[];
+ const displayRating=reviews.length? (reviews.reduce((sum:number,r:any)=>sum+r.rating,0)/reviews.length).toFixed(1):null;
+  const configuredFaq: { question: string; answer: string }[] = product.faq ?? [];
+  const hasPolicyFaq = configuredFaq.some((item) => /ضمان|استرجاع|استبدال|warranty|return/i.test(item.question));
+  const displayFaq: { question: string; answer: string }[] = hasPolicyFaq ? configuredFaq : [...configuredFaq,
+    { question: "الاسترجاع والاستبدال خلال ١٤ يوم", answer: "يمكنك طلب الاسترجاع أو الاستبدال خلال ١٤ يومًا من الاستلام، بشرط أن يكون المنتج بحالته الأصلية وغير مستخدم ومع التغليف." },
+    { question: "الضمان", answer: "يشمل المنتج ضمانًا ضد عيوب التصنيع حسب حالة المنتج. تواصل معنا مع رقم الطلب وصورة العيب لمراجعة الطلب." },
+  ];
   const displayBadges: string[] = product.badges ?? [];
   const displaySpecs: { key: string; value: string }[] = product.specs ?? [];
   const displayUsageInstructions = product.usageInstructions ?? "";
@@ -169,11 +175,10 @@ export default function ProductDetail() {
 
   const featuresContent = displaySpecs.length > 0
     ? displaySpecs.map(s => `${s.key}: ${s.value}`).join("\n")
-    : product.descriptionLong || product.descriptionShort || "منتج عالي الجودة بمواصفات ممتازة.";
+    : product.descriptionLong || product.descriptionShort || "اسأل فهد عن المواصفات المتاحة.";
 
-  const shippingContent = "التوصيل خلال 1-3 أيام عمل داخل المملكة العربية السعودية.\nالشحن مجاني للطلبات فوق 200 ر.س.\nيمكنك تتبع طلبك عبر رقم الشحنة.";
-
-  const warrantyContent = "ضمان سنة كاملة على المنتج.\nإمكانية الاستبدال خلال 7 أيام من الاستلام.\nالمنتج يجب أن يكون بحالته الأصلية عند الاستبدال.";
+  const shippingContent = displayFaq.filter(f=>/توصيل|شحن|shipping|delivery/i.test(f.question)).map(f=>f.answer).join("\n") || "تكلفة الشحن حسب المدينة وتظهر قبل إرسال الطلب. يتم تأكيد موعد التوصيل مع المتجر.";
+  const warrantyContent = displayFaq.filter(f=>/ضمان|استرجاع|استبدال|warranty|return/i.test(f.question)).map(f=>f.answer).join("\n");
 
   const handleQuickChat = (message: string) => {
     setChatProductContext({
@@ -192,6 +197,8 @@ export default function ProductDetail() {
       variantId: selectedVariant?.id != null ? Number(selectedVariant.id) : null,
       image: displayImage,
     });
+    sessionStorage.setItem(`fahd_selection:${localStorage.getItem('chat_session_id')}:${product.id}`,JSON.stringify({quantity:orderQuantity,variantId:String(selectedVariant?.id||'')}));
+    sessionStorage.setItem(`fahd_pending_order:${product.id}`,JSON.stringify({quantity:orderQuantity,variantId:String(selectedVariant?.id||'')}));
     navigate(`/chat/product/${product.id}`);
   };
 
@@ -223,7 +230,7 @@ export default function ProductDetail() {
               src={selectedDisplayImage}
               alt={product.title}
               className="w-full aspect-square object-cover animate-fade-in"
-              data-testid="img-product-main"
+              decoding="async" fetchPriority="high" width={800} height={800} data-testid="img-product-main"
             />
           ) : (
             <div className="w-full aspect-square flex items-center justify-center text-muted-foreground text-6xl">
@@ -243,7 +250,7 @@ export default function ProductDetail() {
                   className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition-all ${selectedImageIdx === index ? "border-[#CDEB63] scale-105" : "border-transparent opacity-70"}`}
                   data-testid={`thumbnail-product-${index}`}
                 >
-                  <img src={image} alt={`${product.title} ${index + 1}`} className="h-full w-full object-cover" />
+                  <img loading="lazy" decoding="async" src={image} alt={`${product.title} ${index + 1}`} className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>
@@ -264,10 +271,10 @@ export default function ProductDetail() {
               </button>
             </div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <div className="flex items-center gap-1">
+              {displayRating && <div className="flex items-center gap-1">
                 <Star className="w-4 h-4 fill-[#CDEB63] text-[#CDEB63]" />
-                <span className="text-sm font-medium">{displayRating}</span>
-              </div>
+                <span className="text-sm font-medium">{displayRating} · مشتريات موثقة</span>
+              </div>}
               <span className="text-xs text-muted-foreground">({displayStock} متوفر)</span>
             </div>
             <h1 className="text-xl font-bold text-foreground leading-relaxed" data-testid="text-product-title">
@@ -318,7 +325,7 @@ export default function ProductDetail() {
             <div className="flex gap-2 flex-wrap">
               <Badge variant="outline" className="shrink-0 text-xs gap-1 no-default-hover-elevate">
                 <Truck className="w-3 h-3" />
-                شحن سريع 1-3 أيام
+                الشحن حسب المدينة
               </Badge>
               <Badge variant="outline" className="shrink-0 text-xs gap-1 no-default-hover-elevate">
                 <CreditCard className="w-3 h-3" />
@@ -326,7 +333,7 @@ export default function ProductDetail() {
               </Badge>
               <Badge variant="outline" className="shrink-0 text-xs gap-1 no-default-hover-elevate">
                 <ShieldCheck className="w-3 h-3" />
-                ضمان سنة
+                تفاصيل الضمان أدناه
               </Badge>
             </div>
           )}
@@ -557,6 +564,8 @@ export default function ProductDetail() {
           )}
 
         </div>
+ {product.videoUrl && <section className="p-4"><h2 className="font-bold mb-2">شاهد المنتج أثناء الاستخدام</h2><video className="w-full rounded-2xl max-h-96" controls preload="none" playsInline src={product.videoUrl} poster={displayImage}/></section>}
+ {reviews.length>0&&<section className="p-4 space-y-3"><h2 className="font-bold">تجارب من مشتريات مستلمة</h2>{reviews.map((r:any,i:number)=><article key={i} className="border rounded-xl p-3"><b>{r.displayName} · {r.rating}/5</b><p>{r.body}</p></article>)}</section>}
       </main>
 
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-xl border-t border-border/50 p-3">

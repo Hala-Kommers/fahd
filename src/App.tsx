@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -10,16 +11,16 @@ import ProductDetail from "@/pages/product-detail";
 import ProductChatPage from "@/pages/product-chat";
 import ChatPage from "@/pages/chat";
 import CartPage from "@/pages/cart";
-import AdminLayout from "@/pages/admin/AdminLayout";
-import Dashboard from "@/pages/admin/Dashboard";
-import ProductsPage from "@/pages/admin/Products";
-import OrdersPage from "@/pages/admin/Orders";
-import OrderDetails from "@/pages/admin/OrderDetails";
-import ProductDetails from "@/pages/admin/ProductDetails";
-import CouponsPage from "@/pages/admin/Coupons";
-import BotSettings from "@/pages/admin/Settings";
-import ChatsPage from "@/pages/admin/Chat";
-import LoginPage from "@/pages/admin/Login";
+const AdminLayout = lazy(() => import("@/pages/admin/AdminLayout"));
+const Dashboard = lazy(() => import("@/pages/admin/Dashboard"));
+const ProductsPage = lazy(() => import("@/pages/admin/Products"));
+const OrdersPage = lazy(() => import("@/pages/admin/Orders"));
+const OrderDetails = lazy(() => import("@/pages/admin/OrderDetails"));
+const ProductDetails = lazy(() => import("@/pages/admin/ProductDetails"));
+const CouponsPage = lazy(() => import("@/pages/admin/Coupons"));
+const BotSettings = lazy(() => import("@/pages/admin/Settings"));
+const ChatsPage = lazy(() => import("@/pages/admin/Chat"));
+const LoginPage = lazy(() => import("@/pages/admin/Login"));
 import AdminGuard from "@/components/AdminGuard";
 import OrderTrackingPage from "@/pages/order-tracking";
 import NotFound from "@/pages/not-found";
@@ -59,7 +60,7 @@ function App() {
       <TooltipProvider>
         <FahdProvider>
           <AnalyticsPageTracker />
-          <Router />
+          <Suspense fallback={<p className="p-8 text-center" role="status">جار التحميل…</p>}><Router /></Suspense>
           <OrderSheet />
           <Toaster />
         </FahdProvider>
