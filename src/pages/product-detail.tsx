@@ -149,7 +149,12 @@ export default function ProductDetail() {
   const displayStock = selectedVariant?.stock ?? (product.stockTotal ?? product.inventory?.stockTotal ?? product.stock ?? 0);
   const reviews=product.reviews||[];
  const displayRating=reviews.length? (reviews.reduce((sum:number,r:any)=>sum+r.rating,0)/reviews.length).toFixed(1):null;
-  const displayFaq: { question: string; answer: string }[] = product.faq ?? [];
+  const configuredFaq: { question: string; answer: string }[] = product.faq ?? [];
+  const hasPolicyFaq = configuredFaq.some((item) => /ضمان|استرجاع|استبدال|warranty|return/i.test(item.question));
+  const displayFaq: { question: string; answer: string }[] = hasPolicyFaq ? configuredFaq : [...configuredFaq,
+    { question: "الاسترجاع والاستبدال خلال ١٤ يوم", answer: "يمكنك طلب الاسترجاع أو الاستبدال خلال ١٤ يومًا من الاستلام، بشرط أن يكون المنتج بحالته الأصلية وغير مستخدم ومع التغليف." },
+    { question: "الضمان", answer: "يشمل المنتج ضمانًا ضد عيوب التصنيع حسب حالة المنتج. تواصل معنا مع رقم الطلب وصورة العيب لمراجعة الطلب." },
+  ];
   const displayBadges: string[] = product.badges ?? [];
   const displaySpecs: { key: string; value: string }[] = product.specs ?? [];
   const displayUsageInstructions = product.usageInstructions ?? "";
@@ -173,7 +178,7 @@ export default function ProductDetail() {
     : product.descriptionLong || product.descriptionShort || "اسأل فهد عن المواصفات المتاحة.";
 
   const shippingContent = displayFaq.filter(f=>/توصيل|شحن|shipping|delivery/i.test(f.question)).map(f=>f.answer).join("\n") || "تكلفة الشحن حسب المدينة وتظهر قبل إرسال الطلب. يتم تأكيد موعد التوصيل مع المتجر.";
-  const warrantyContent = displayFaq.filter(f=>/ضمان|استرجاع|استبدال|warranty|return/i.test(f.question)).map(f=>f.answer).join("\n") || "لم تُسجل سياسة لهذا المنتج بعد؛ تأكد من المتجر قبل الطلب.";
+  const warrantyContent = displayFaq.filter(f=>/ضمان|استرجاع|استبدال|warranty|return/i.test(f.question)).map(f=>f.answer).join("\n");
 
   const handleQuickChat = (message: string) => {
     setChatProductContext({
