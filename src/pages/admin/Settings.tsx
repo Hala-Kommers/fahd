@@ -21,6 +21,7 @@ const PROVIDERS = [
 
 const MODELS_BY_PROVIDER: Record<string, { label: string; value: string }[]> = {
   google: [
+    { label: "Gemini 3.8 Flash", value: "gemini-3.8-flash" },
     { label: "Gemini 2.0 Flash", value: "gemini-2.0-flash" },
     { label: "Gemini 2.5 Flash", value: "gemini-2.5-flash" },
     { label: "Gemini 3.0 Pro", value: "gemini-3.0-pro" },
@@ -214,15 +215,18 @@ export default function BotSettingsPage() {
     setTestState("loading");
     setTestMessage("");
     try {
+      if (!payload) throw new Error("انتظر تحميل الإعدادات أولًا");
+      if (!apiKey.trim() && !config?.hasApiKey) throw new Error("أدخل مفتاح Google AI Studio أولًا");
+      await updateMutation.mutateAsync(payload);
       const res = await apiRequest("POST", "/api/admin/bot/test-connection");
       const data = await res.json();
       const result = data?.data ?? data;
-      if (result?.ok) {
+    if (result?.ok) {
         setTestState("success");
         setTestMessage(`متصل: ${result.provider}`);
       } else {
         setTestState("error");
-        setTestMessage("تعذّر اختبار الاتصال");
+      setTestMessage(data?.details || data?.error || "تعذّر اختبار الاتصال");
       }
     } catch (error: any) {
       setTestState("error");
