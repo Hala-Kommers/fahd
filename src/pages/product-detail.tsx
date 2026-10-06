@@ -13,7 +13,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Star, Minus, Plus, Truck, CreditCard, ShieldCheck, ArrowRight, ShoppingCart, Copy } from "lucide-react";
+import { Minus, Plus, Truck, CreditCard, ShieldCheck, ArrowRight, ShoppingCart, Copy } from "lucide-react";
+import ProductRating from "@/components/ProductRating";
 import { useEffect, useState } from "react";
 
 export default function ProductDetail() {
@@ -148,7 +149,6 @@ export default function ProductDetail() {
   const totalPrice = displayPrice * orderQuantity;
   const displayStock = selectedVariant?.stock ?? (product.stockTotal ?? product.inventory?.stockTotal ?? product.stock ?? 0);
   const reviews=product.reviews||[];
- const displayRating=reviews.length? (reviews.reduce((sum:number,r:any)=>sum+r.rating,0)/reviews.length).toFixed(1):null;
   const configuredFaq: { question: string; answer: string }[] = product.faq ?? [];
   const hasPolicyFaq = configuredFaq.some((item) => /ضمان|استرجاع|استبدال|warranty|return/i.test(item.question));
   const displayFaq: { question: string; answer: string }[] = hasPolicyFaq ? configuredFaq : [...configuredFaq,
@@ -198,7 +198,7 @@ export default function ProductDetail() {
       image: displayImage,
     });
     sessionStorage.setItem(`fahd_selection:${localStorage.getItem('chat_session_id')}:${product.id}`,JSON.stringify({quantity:orderQuantity,variantId:String(selectedVariant?.id||'')}));
-    sessionStorage.setItem(`fahd_pending_order:${product.id}`,JSON.stringify({quantity:orderQuantity,variantId:String(selectedVariant?.id||'')}));
+    sessionStorage.removeItem(`fahd_pending_order:${product.id}`);
     navigate(`/chat/product/${product.id}`);
   };
 
@@ -271,10 +271,7 @@ export default function ProductDetail() {
               </button>
             </div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              {displayRating && <div className="flex items-center gap-1">
-                <Star className="w-4 h-4 fill-[#CDEB63] text-[#CDEB63]" />
-                <span className="text-sm font-medium">{displayRating} · مشتريات موثقة</span>
-              </div>}
+              <ProductRating product={product} />
               <span className="text-xs text-muted-foreground">({displayStock} متوفر)</span>
             </div>
             <h1 className="text-xl font-bold text-foreground leading-relaxed" data-testid="text-product-title">

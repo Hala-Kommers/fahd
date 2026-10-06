@@ -351,8 +351,38 @@
   }
 }
 
+/* Customer screens retain the same phone layout on every viewport. */
+.mobile-store {
+  width: 100%;
+  max-width: 430px;
+  margin-inline: auto;
+  min-height: 100dvh;
+  background: hsl(var(--background));
+  border-inline: 1px solid hsl(var(--border));
+}
+.mobile-store .fixed {
+  max-width: 430px;
+  margin-inline: auto;
+  left: 0;
+  right: 0;
+}
+.mobile-store button.fixed {
+  left: auto;
+  right: max(1rem, calc((100vw - 430px) / 2 + 1rem));
+}
+.mobile-store input, .mobile-store select { min-width: 0; }
+
 /* Saudi Sadu-inspired geometry, kept behind the chat bubbles. */
+.chat-benefits-ticker { animation: chat-benefits-scroll 12s linear infinite; will-change: transform; }
+@keyframes chat-benefits-scroll {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+
+/* Quiet line art: Sadu diamonds, palm, Diriyah walls, and Riyadh skyline. */
 .saudi-chat-pattern {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='160' viewBox='0 0 180 160'%3E%3Cg fill='none' stroke='%23758b53' stroke-opacity='.075' stroke-width='1'%3E%3Cpath d='M90 14l14 14-14 14-14-14zM90 20l8 8-8 8-8-8zM0 94l14 14-14 14M180 94l-14 14 14 14M35 70l10-10 10 10 10-10 10 10M105 140l10-10 10 10 10-10 10 10M22 24h12m-6-6v12M146 104h12m-6-6v12'/%3E%3C/g%3E%3C/svg%3E");
+  background-color: #e3ebe5;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22280%22%20height%3D%22300%22%20viewBox%3D%220%200%20280%20300%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%2352765b%22%20stroke-opacity%3D%22.11%22%20stroke-width%3D%221.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M35%2025l12%2012-12%2012-12-12zM35%2031l6%206-6%206-6-6zM210%20160l12%2012-12%2012-12-12zM210%20166l6%206-6%206-6-6zM12%20155l10-10%2010%2010%2010-10%2010%2010M180%20275l10-10%2010%2010%2010-10%2010%2010M125%2040h12m-6-6v12M60%20230h12m-6-6v12%22%2F%3E%3Cg%20transform%3D%22translate%28170%2032%29%22%3E%3Cpath%20d%3D%22M8%2067h58M18%2067V10h37v57M18%2010q18%2032%2037%200M27%2067V50h19v17M22%2018h29%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate%2827%2095%29%22%3E%3Cpath%20d%3D%22M0%2047h64M6%2047V15h9V9h7v6h10V9h7v6h10V9h7v38M26%2047V33q6-11%2012%200v14M13%2024h5m27%200h5%22%2F%3E%3C%2Fg%3E%3Cg%20transform%3D%22translate%28100%20195%29%22%3E%3Cpath%20d%3D%22M24%2055V20M24%2020Q6%203%200%2018M24%2020Q9%2015%204%2032M24%2020Q23%200%2031%204M24%2020Q43%202%2050%2018M24%2020Q40%2016%2046%2032M17%2055h15%22%2F%3E%3C%2Fg%3E%3Cpath%20d%3D%22M240%20230l10-20%2010%2020M242%20226h16%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
   background-repeat: repeat;
 }
+.dark .saudi-chat-pattern { background-color: #17271f; }

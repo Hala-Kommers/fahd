@@ -1,7 +1,8 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, ShoppingCart, Copy } from "lucide-react";
+import { ShoppingCart, Copy } from "lucide-react";
+import ProductRating from "@/components/ProductRating";
 import type { Product } from "@shared/schema";
 import type { MouseEvent } from "react";
 import { formatPrice } from "@/lib/mockData";
@@ -104,6 +105,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           <h3 className="font-semibold text-sm leading-relaxed line-clamp-2 text-foreground mb-1">
             {product.title}
           </h3>
+          <ProductRating product={p} />
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-base text-foreground">{formatPrice(displayPrice)}</span>
             {displayOldPrice && (
