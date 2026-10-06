@@ -18,6 +18,7 @@ type OrderStatus = "new" | "confirmed" | "shipped" | "delivered" | "returned" | 
 type AdminOrder = {
   id: number;
   orderNumber: string;
+  conversationId?: number | null;
   createdAt: string;
   customerName: string;
   customerPhone: string;
@@ -189,7 +190,7 @@ export default function OrdersPage() {
                   <TableCell><Badge variant="secondary" className="text-xs">{order.paymentMethod}</Badge></TableCell>
                   <TableCell>{statusBadge(order.status)}</TableCell>
                   <TableCell><Badge variant="outline" className="text-xs">{order.sessionId ? "Analytics" : "غير مرتبط"}</Badge></TableCell>
-                  <TableCell className="no-click"><Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setLocation(`/admin/orders/${order.id}`); }}><Eye className="h-4 w-4" /></Button></TableCell>
+                  <TableCell className="no-click">{order.conversationId && <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setLocation(`/admin/chat?conversation=${order.conversationId}`); }}>المحادثة</Button>}<Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setLocation(`/admin/orders/${order.id}`); }}><Eye className="h-4 w-4" /></Button></TableCell>
                 </TableRow>
               ))}
             </TableBody>

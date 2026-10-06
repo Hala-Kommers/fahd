@@ -232,7 +232,7 @@ export default function OrderDetails() {
 
           {order.conversation && (
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><MessageSquare className="w-4 h-4 text-primary" /> محادثة الطلب</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><MessageSquare className="w-4 h-4 text-primary" /> محادثة الطلب {order.conversationId && <a className="text-xs underline" href={`/admin/chat?conversation=${order.conversationId}`}>فتح السجل الكامل</a>}</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-sm max-h-80 overflow-y-auto">
                 {(order.conversation.messages || []).map((message) => {
                   const isCustomer = isCustomerMessage(message.role);
