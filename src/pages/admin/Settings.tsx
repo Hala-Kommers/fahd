@@ -1,3 +1,4 @@
+import TikTokSettings from "@/components/TikTokSettings";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -250,6 +251,7 @@ export default function BotSettingsPage() {
         </Button>
       </div>
 
+      <TikTokSettings />
       <Tabs defaultValue="provider" className="w-full">
         <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="provider" className="gap-2"><SlidersHorizontal className="w-4 h-4" /> الإعدادات</TabsTrigger>
