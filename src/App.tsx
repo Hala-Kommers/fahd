@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -55,12 +55,13 @@ function Router() {
 }
 
 function App() {
+  const [path] = useLocation();
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <FahdProvider>
           <AnalyticsPageTracker />
-          <Suspense fallback={<p className="p-8 text-center" role="status">جار التحميل…</p>}><Router /></Suspense>
+          <div className={path.startsWith('/admin') ? undefined : 'mobile-store'}><Suspense fallback={<p className="p-8 text-center" role="status">جار التحميل…</p>}><Router /></Suspense></div>
           <OrderSheet />
           <Toaster />
         </FahdProvider>

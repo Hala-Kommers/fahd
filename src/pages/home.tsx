@@ -83,17 +83,17 @@ export default function Home() {
 
       <main className="max-w-7xl mx-auto px-4 pb-24">
         <div className="py-6">
-          <Card className="animate-fade-in-up overflow-hidden rounded-[24px] border-0 relative bg-gradient-to-bl from-[#e8f5d4] via-[#f0f9e8] to-[#dff0d0] dark:from-[#1a2e10] dark:via-[#1e3315] dark:to-[#152a0c] p-6 md:p-8">
+          <Card className="animate-fade-in-up overflow-hidden rounded-[24px] border-0 relative bg-gradient-to-bl from-[#e8f5d4] via-[#f0f9e8] to-[#dff0d0] dark:from-[#1a2e10] dark:via-[#1e3315] dark:to-[#152a0c] p-6 ">
             <div className="relative z-10">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#CDEB63] to-[#a8d94a] flex items-center justify-center mb-4 shadow-lg">
                 <span className="text-2xl font-bold text-[#1a2e05]">ف</span>
               </div>
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-2 leading-tight">
+              <h1 className="text-2xl font-bold text-foreground mb-2 leading-tight">
                 يالله نبدأ..
                 <br />
                 وش تبي تشتري؟ 🛒
               </h1>
-              <p className="text-muted-foreground text-sm md:text-base mb-5 max-w-md">
+              <p className="text-muted-foreground text-sm mb-5 max-w-md">
                 تسوّق براحتك وفهد معك خطوة بخطوة — من الاختيار للتوصيل لين باب بيتك!
               </p>
               <Button
@@ -260,7 +260,7 @@ export default function Home() {
           )}
 
           {isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 gap-3 ">
               {Array.from({ length: 8 }).map((_, i) => (
                 <Card key={i} className="rounded-[20px] p-0 overflow-hidden">
                   <Skeleton className="aspect-square w-full" />
@@ -282,7 +282,7 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 gap-3 ">
               {products.map((product, idx) => (
                 <div
                   key={product.id}

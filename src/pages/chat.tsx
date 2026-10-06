@@ -1,5 +1,6 @@
 
 import { useState, useRef, useEffect, useCallback, Fragment, type ReactNode } from "react";
+import ProductRating from "@/components/ProductRating";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ensureChatSession, trackCommerce, attribution } from "@/lib/commerce";
@@ -39,6 +40,7 @@ interface ChatMsg {
 }
 
 type ChatAction =
+  | { type: "quick_reply"; payload: { label: string; message: string } }
   | { type: "show_offers" }
  | { type: "checkout" }
  | { type: "address_form" }
@@ -470,65 +472,40 @@ function ProductActionCard({
 
 function ProductContextCard({
   context,
-  onChipClick,
-  onClear,
 }: {
   context: NonNullable<ReturnType<typeof useFahd>["chatProductContext"]>;
-  onChipClick: (chip: string) => void;
-  onClear: () => void;
 }) {
   const product = context.product as any;
   const price = product?.pricing?.price ?? product?.price ?? null;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 pb-3">
-      <div className="rounded-3xl border border-[#CDEB63]/50 bg-card/95 shadow-sm p-3 flex gap-3 items-center animate-fade-in-up">
+    <div className="max-w-2xl mx-auto px-3 pb-1.5">
+      <div className="rounded-2xl border border-[#CDEB63]/50 bg-card/95 shadow-sm p-1.5 flex gap-2 items-center animate-fade-in-up">
         {context.image ? (
           <img
             src={context.image}
             alt={context.product.title}
-            className="w-20 h-20 rounded-2xl object-cover border border-border/50 bg-muted shrink-0"
+            className="w-[72px] h-[72px] rounded-xl object-cover border border-border/50 bg-muted shrink-0"
             data-testid="img-chat-product-context"
           />
         ) : (
-          <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center shrink-0">
+          <div className="w-[72px] h-[72px] rounded-2xl bg-muted flex items-center justify-center shrink-0">
             <Package className="w-8 h-8 text-muted-foreground" />
           </div>
         )}
-        <div className="flex-1 min-w-0 space-y-2">
+        <div className="flex-1 min-w-0 space-y-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-[#6f941e] mb-0.5">تسأل عن هذا المنتج</p>
-              <h2 className="text-sm font-bold text-foreground truncate" data-testid="text-chat-product-title">
+              
+              <h2 className="text-xs font-bold text-foreground leading-4 line-clamp-2" data-testid="text-chat-product-title">
                 {context.product.title}
               </h2>
               {price !== null && (
                 <p className="text-xs text-muted-foreground">{price} ر.س</p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={onClear}
-              className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 min-h-[32px] px-2"
-            >
-              إزالة
-            </button>
           </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-            {productQuickChips.map((chip, idx) => {
-              const testIds = ["features", "shipping", "warranty"];
-              return (
-                <button
-                  key={chip}
-                  onClick={() => onChipClick(chip)}
-                  className="shrink-0 text-xs px-3 py-1.5 rounded-full bg-[#CDEB63]/15 text-foreground border border-[#CDEB63]/40 hover-elevate"
-                  data-testid={`chip-chat-quick-${testIds[idx]}`}
-                >
-                  {chip}
-                </button>
-              );
-            })}
-          </div>
+          <ProductRating product={product} />
         </div>
       </div>
     </div>
@@ -569,6 +546,11 @@ export default function ChatPage() {
   const pendingMessagesRef = useRef<string[]>([]);
   const historyRequestSentRef = useRef(false);
   const pendingFinalHistorySyncRef = useRef(false);
+  useEffect(() => {
+    if (!isHistoryLoaded || !offerProduct || !chatProductContext || messages.length) return;
+    const text = `هلا والله 👋 معك فهد. شفت إنك مهتم بـ**${offerProduct.title}**، وهو متوفر بأكثر من عرض. إذا تبي أطلع لك الأوفر بينهم وأضبط لك الطلب مباشرة.`;
+    setMessages([{ id: `welcome-${sessionId}-${offerProduct.id}`, sender: 'fahd', text, actions: [{ type: 'quick_reply', payload: { label: 'أظهر العروض', message: 'العروض' } }, { type: 'quick_reply', payload: { label: 'استفسار عن المنتج', message: 'وش أهم مميزات هذا المنتج ولمن يناسب؟' } }] }]);
+  }, [isHistoryLoaded, offerProduct, chatProductContext, messages.length, sessionId]);
 
   const updateMessage = useCallback((messageId: string, updater: (message: ChatMsg) => ChatMsg) => {
     setMessages((prev) => prev.map((message) => (message.id === messageId ? updater(message) : message)));
@@ -909,13 +891,13 @@ export default function ChatPage() {
   const canSend = isConnected && isHistoryLoaded;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
+    <div className="h-[100dvh] min-h-0 overflow-hidden bg-background flex flex-col">
+      <header className="shrink-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
+        <div className="max-w-2xl mx-auto px-3 py-0.5 flex items-center gap-2">
           <button onClick={() => navigate("/")} className="text-muted-foreground min-w-[44px] min-h-[44px] flex items-center justify-center" data-testid="button-chat-back">
             <ArrowRight className="w-5 h-5" />
           </button>
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#CDEB63] to-[#a8d94a] flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#CDEB63] to-[#a8d94a] flex items-center justify-center">
             <span className="text-sm font-bold text-[#1a2e05]">ف</span>
           </div>
           <div>
@@ -935,14 +917,12 @@ export default function ChatPage() {
         {chatProductContext && (
           <ProductContextCard
             context={chatProductContext}
-            onChipClick={handleQuickChipClick}
-            onClear={clearChatProductContext}
           />
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto saudi-chat-pattern">
-        <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="flex-1 min-h-0 overflow-y-auto saudi-chat-pattern">
+        <div className="max-w-2xl mx-auto px-3 py-3">
           {showWelcome && !hasProductContext && (
             <div className="space-y-6 mb-6">
               <div className="flex flex-col items-center text-center py-6">
@@ -977,7 +957,7 @@ export default function ChatPage() {
           )}
 
           <div className="space-y-3">
-            {messages.map((msg) => (
+            {messages.map((msg, messageIndex) => (
               <div key={msg.id} className="animate-fade-in-up">
                 <div className={`flex gap-2 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}>
                   {msg.sender === "fahd" && (
@@ -985,9 +965,9 @@ export default function ChatPage() {
                       <span className="text-[10px] font-bold text-[#1a2e05]">ف</span>
                     </div>
                   )}
-                  <div className="max-w-[85%] space-y-2">
+                  <div className={`${msg.actions?.some(a => a.type === 'show_offers') ? 'flex-1 min-w-0' : 'max-w-[85%]'} space-y-2`}>
                     <div
-                      className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${msg.sender === "fahd"
+                      className={`rounded-2xl px-3.5 py-2.5 text-[13px] leading-[1.75] ${msg.sender === "fahd"
                         ? "bg-card border border-card-border shadow-sm rounded-tr-md"
                         : "bg-[#CDEB63]/20 text-foreground rounded-tl-md whitespace-pre-line"
                         }`}
@@ -1014,6 +994,15 @@ export default function ChatPage() {
                         }}
                       />
                     )}
+                    {msg.sender === "fahd" && messageIndex === messages.length - 1 && !isTyping && (
+                      <div className="flex flex-wrap gap-1.5" aria-label="اختيارات سريعة للمحادثة">
+                        {(msg.actions || []).filter((action): action is Extract<ChatAction, { type: 'quick_reply' }> => action.type === 'quick_reply').slice(0, 3).map(({ payload: choice }) => (
+                          <button key={choice.label} type="button" disabled={!canSend || isTyping} onClick={() => handleQuickChipClick(choice.message)} className="rounded-full border border-[#CDEB63]/70 bg-[#CDEB63]/10 px-3 py-2 text-[11px] font-medium hover:bg-[#CDEB63]/25 active:scale-95 transition disabled:opacity-50">
+                            {choice.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {msg.sender === "fahd" && msg.actions?.some((action) => action.type === "address_form") && (
                       <AddressFormCard cities={cities} disabled={!canSend || isTyping} onSubmit={handleAddressSubmit} />
                     )}
@@ -1034,13 +1023,14 @@ export default function ChatPage() {
                 </div>
               </div>
             )}
+            <div id="chat-commerce" />
             <div ref={messagesEndRef} />
           </div>
         </div>
       </div>
 
-      <div className="sticky bottom-0 bg-background/90 backdrop-blur-xl border-t border-border/50 p-3">
-        <div className="max-w-2xl mx-auto space-y-2">
+      <div className="shrink-0 bg-background/90 backdrop-blur-xl border-t border-border/50 px-3 py-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
+        <div className="max-w-2xl mx-auto space-y-1">
           <ChatProductActions orderRequest={orderRequest} offerRequest={offerRequest} selectedOffer={selectedOffer} />
           <div className="flex gap-2">
               <Input
@@ -1049,7 +1039,7 @@ export default function ChatPage() {
                 placeholder="اكتب لفهد هنا..."
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                 disabled={!canSend || isTyping}
-                className="flex-1 rounded-full bg-card border-card-border min-h-[44px]"
+                className="flex-1 rounded-full bg-card border-card-border h-10 min-h-10 text-base"
                 data-testid="input-chat-message"
               />
               <Button
