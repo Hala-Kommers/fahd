@@ -25,4 +25,8 @@ export default defineConfig({
   build: {
     cssMinify: "esbuild",
   },
+  preview: {
+    host: true,
+    allowedHosts: ["fahd.halakommers.com"],
+  },
 });
