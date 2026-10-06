@@ -217,12 +217,12 @@ export default function BotSettingsPage() {
       const res = await apiRequest("POST", "/api/admin/bot/test-connection");
       const data = await res.json();
       const result = data?.data ?? data;
-      if (result?.ok) {
+    if (result?.ok) {
         setTestState("success");
         setTestMessage(`متصل: ${result.provider}`);
       } else {
         setTestState("error");
-        setTestMessage("تعذّر اختبار الاتصال");
+      setTestMessage(data?.details || data?.error || "تعذّر اختبار الاتصال");
       }
     } catch (error: any) {
       setTestState("error");

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard, ShoppingCart, Package, MessageSquare,
-  Settings, Ticket,
+  Settings, Ticket, MapPinned,
   Search, Plus, ArrowRight, LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ const menuItems = [
   { title: "الكوبونات", href: "/admin/coupons", icon: Ticket },
   { title: "المحادثات", href: "/admin/chat", icon: MessageSquare },
   { title: "الإعدادات", href: "/admin/settings", icon: Settings },
+  { title: "المدن والتوصيل", href: "/admin/cities", icon: MapPinned },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

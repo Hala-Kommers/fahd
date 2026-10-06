@@ -19,6 +19,7 @@ const OrderDetails = lazy(() => import("@/pages/admin/OrderDetails"));
 const ProductDetails = lazy(() => import("@/pages/admin/ProductDetails"));
 const CouponsPage = lazy(() => import("@/pages/admin/Coupons"));
 const BotSettings = lazy(() => import("@/pages/admin/Settings"));
+const CitiesPage = lazy(() => import("@/pages/admin/Cities"));
 const ChatsPage = lazy(() => import("@/pages/admin/Chat"));
 const LoginPage = lazy(() => import("@/pages/admin/Login"));
 import AdminGuard from "@/components/AdminGuard";
@@ -48,6 +49,7 @@ function Router() {
       <Route path="/admin/coupons" component={() => <AdminGuard><AdminLayout><CouponsPage /></AdminLayout></AdminGuard>} />
       <Route path="/admin/chat" component={() => <AdminGuard><AdminLayout><ChatsPage /></AdminLayout></AdminGuard>} />
       <Route path="/admin/settings" component={() => <AdminGuard><AdminLayout><BotSettings /></AdminLayout></AdminGuard>} />
+      <Route path="/admin/cities" component={() => <AdminGuard><AdminLayout><CitiesPage /></AdminLayout></AdminGuard>} />
 
       <Route component={NotFound} />
     </Switch>
