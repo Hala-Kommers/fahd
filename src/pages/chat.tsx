@@ -5,13 +5,14 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ensureChatSession, trackCommerce, attribution } from "@/lib/commerce";
 import { apiRequest } from "@/lib/queryClient";
+import { mergeChatTimeline } from "@/lib/chat-timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useFahd } from "@/lib/fahd-store";
 import { useToast } from "@/hooks/use-toast";
 import { getAnalyticsIdentity } from "@/lib/analytics";
-import ChatProductActions from "@/components/ChatProductActions";
+import ChatProductActions, { ChatCommerceCard, type CommercePanel } from "@/components/ChatProductActions";
 import OfferCards from "@/components/OfferCards";
 import ChatOfferBanner from "@/components/ChatOfferBanner";
 import {
@@ -31,6 +32,7 @@ interface ChatMsg {
   id: string;
   sender: "fahd" | "user";
   text: string;
+  commerce?: { panel: CommercePanel; productId?: number; quantity?: number; variantId?: number };
   actions?: ChatAction[];
   meta?: {
     needsHuman: boolean;
@@ -518,13 +520,18 @@ export default function ChatPage() {
   const { chatProductContext, clearChatProductContext } = useFahd();
   const [shoppingNeed,setShoppingNeed]=useState("");
  const [shoppingBudget,setShoppingBudget]=useState("");
- const [orderRequest,setOrderRequest]=useState(0);
- const [offerRequest, setOfferRequest] = useState(0);
-  const [selectedOffer, setSelectedOffer] = useState<{ quantity: number; requestId: number }>();
   const { data: offerProduct } = useQuery<any>({ queryKey: ["/api/products", String(chatProductContext?.productId || "")], enabled: !!chatProductContext });
   const [connectionStatus, setConnectionStatus] = useState("connecting");
   const [cities, setCities] = useState<CityOption[]>([]);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const openCommerce = useCallback((panel: CommercePanel, quantity?: number, productId?: number, variantId?: number) => {
+    setMessages(prev => [...prev, {
+      id: `commerce-${generateId()}`, sender: 'fahd', text: '',
+      commerce: { panel, quantity, productId: productId ?? chatProductContext?.productId, variantId: variantId ?? chatProductContext?.variantId ?? undefined },
+    }]);
+    setShowWelcome(false);
+    if (panel === 'offers') trackCommerce('offer_viewed', productId ?? chatProductContext?.productId);
+  }, [chatProductContext]);
   const [sessionId, setSessionId] = useState<string | null>(localStorage.getItem(CHAT_SESSION_ID_KEY));
   const [inputText, setInputText] = useState("");
   const [showWelcome, setShowWelcome] = useState(true);
@@ -678,7 +685,7 @@ export default function ChatPage() {
 
       if (data.type === "history") {
         const historyMessages = Array.isArray(data.messages) ? parseHistoryMessages(data.messages) : [];
-        setMessages(historyMessages);
+        setMessages(previous => mergeChatTimeline(historyMessages, previous.length ? previous : readStoredMessages(data.session_id || sessionIdRef.current || '')));
         setShowWelcome(historyMessages.length === 0);
         setIsHistoryLoaded(true);
         if (pendingFinalHistorySyncRef.current) {
@@ -712,7 +719,6 @@ export default function ChatPage() {
       }
 
       if (data.type === "ai_done") {
-        if(data.actions?.some((a:ChatAction)=>a.type==="checkout"||a.type==="address_form"))setOrderRequest(v=>v+1);
  const messageId = typingMessageIdRef.current;
         const finalText = getAiEventText(data) || streamingTextRef.current;
 
@@ -878,7 +884,7 @@ export default function ChatPage() {
   };
 
   const handleQuickChipClick = (chip: string) => {
- if(chip==="العروض"){setOfferRequest(v=>v+1);return} if(chip==="اطلب الآن"){setOrderRequest(v=>v+1);return}
+ if(chip==="العروض"){openCommerce('offers');return} if(chip==="اطلب الآن"){openCommerce('order');return}
  sendMessage(chip);
   };
 
@@ -958,7 +964,8 @@ export default function ChatPage() {
 
           <div className="space-y-3">
             {messages.map((msg, messageIndex) => (
-              <div key={msg.id} className="animate-fade-in-up">
+              <div key={msg.id} className="animate-fade-in-up" data-chat-message={msg.id}>
+                {msg.commerce ? <ChatCommerceCard cardId={msg.id} {...msg.commerce} onChoose={(quantity, productId, variantId) => openCommerce('order', quantity, productId, variantId)} /> : <>
                 <div className={`flex gap-2 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}>
                   {msg.sender === "fahd" && (
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#CDEB63] to-[#a8d94a] flex items-center justify-center shrink-0 mt-1">
@@ -981,7 +988,7 @@ export default function ChatPage() {
                       ) : msg.text}
                     </div>
                     {msg.sender === "fahd" && offerProduct && msg.actions?.some(a=>a.type==="show_offers") && (
-                      <OfferCards product={offerProduct} stock={offerProduct.stockTotal ?? 0} onChoose={quantity => setSelectedOffer({ quantity, requestId: Date.now() })} />
+                      <OfferCards product={offerProduct} stock={offerProduct.stockTotal ?? 0} onChoose={quantity => openCommerce('order', quantity)} />
                     )}
                     {msg.sender === "fahd" && (
                       <ActionButtons
@@ -1003,11 +1010,12 @@ export default function ChatPage() {
                         ))}
                       </div>
                     )}
-                    {msg.sender === "fahd" && msg.actions?.some((action) => action.type === "address_form") && (
-                      <AddressFormCard cities={cities} disabled={!canSend || isTyping} onSubmit={handleAddressSubmit} />
+                    {msg.sender === "fahd" && msg.actions?.some((action) => action.type === "address_form" || action.type === "checkout") && (
+                      <ChatCommerceCard cardId={msg.id} panel="order" productId={chatProductContext?.productId} variantId={chatProductContext?.variantId ?? undefined} onChoose={(quantity, productId, variantId) => openCommerce('order', quantity, productId, variantId)} />
                     )}
                   </div>
                 </div>
+                </>}
               </div>
             ))}
 
@@ -1023,7 +1031,6 @@ export default function ChatPage() {
                 </div>
               </div>
             )}
-            <div id="chat-commerce" />
             <div ref={messagesEndRef} />
           </div>
         </div>
@@ -1031,7 +1038,7 @@ export default function ChatPage() {
 
       <div className="shrink-0 bg-background/90 backdrop-blur-xl border-t border-border/50 px-3 py-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
         <div className="max-w-2xl mx-auto space-y-1">
-          <ChatProductActions orderRequest={orderRequest} offerRequest={offerRequest} selectedOffer={selectedOffer} />
+          <ChatProductActions onOpen={openCommerce} />
           <div className="flex gap-2">
               <Input
                 value={inputText}

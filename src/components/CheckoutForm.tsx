@@ -1,5 +1,5 @@
 import { trackTikTokPurchase } from '@/lib/tiktok';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { getAnalyticsIdentity } from '@/lib/analytics';
@@ -13,14 +13,15 @@ import { useLocation } from 'wouter';
 type Details={customerName:string;customerPhone:string;cityId:string;addressRaw:string;nationalAddress:string};
 const empty:Details={customerName:'',customerPhone:'',cityId:'',addressRaw:'',nationalAddress:''};
 function readDraft(){try{return {...empty,...JSON.parse(sessionStorage.getItem('checkout_details')||'{}')}}catch{return empty}}
-export default function CheckoutForm({items,source='chat',onSuccess,onPendingChange}:{items:CheckoutItem[];source?:'chat'|'cart';onSuccess?:(r:Receipt)=>void;onPendingChange?:(pending:boolean)=>void}){
+export default function CheckoutForm({items,source='chat',onSuccess,onPendingChange,initialReceipt=null}:{items:CheckoutItem[];source?:'chat'|'cart';onSuccess?:(r:Receipt)=>void;onPendingChange?:(pending:boolean)=>void;initialReceipt?:Receipt|null}){
+ const phoneErrorId=useId();
  const [,navigate]=useLocation();const reduced=useReducedMotion();const qc=useQueryClient();
- const [form,setForm]=useState<Details>(readDraft);const [receipt,setReceipt]=useState<Receipt|null>(null);const [notice,setNotice]=useState('');const [phoneTouched,setPhoneTouched]=useState(false);const [ready,setReady]=useState(source==='cart');
+ const [form,setForm]=useState<Details>(readDraft);const [receipt,setReceipt]=useState<Receipt|null>(initialReceipt);const [notice,setNotice]=useState('');const [phoneTouched,setPhoneTouched]=useState(false);const [ready,setReady]=useState(source==='cart');
  const productId=items[0]?.productId;const oldPrice=useRef<number|null>(null);
  const basketKey=JSON.stringify(items);const idemStorage=`checkout_key:${source}:${basketKey}`;
  const [idempotencyKey]=useState(()=>{const old=sessionStorage.getItem(idemStorage);if(old)return old;const key=crypto.randomUUID();sessionStorage.setItem(idemStorage,key);return key});
  useEffect(()=>{sessionStorage.setItem('checkout_details',JSON.stringify(form))},[form]);
- useEffect(()=>{if(source==='chat'){void engageChat(productId).then(()=>{setReady(true);trackCommerce('checkout_started',productId)}).catch(()=>setNotice('تعذر تجهيز المحادثة. حاول فتح الطلب مرة أخرى.'))}},[source,productId]);
+ useEffect(()=>{if(source==='chat'&&!initialReceipt){void engageChat(productId).then(()=>{setReady(true);trackCommerce('checkout_started',productId)}).catch(()=>setNotice('تعذر تجهيز المحادثة. حاول فتح الطلب مرة أخرى.'))}},[source,productId,initialReceipt]);
  const credentials=chatCredentials();
  const {data:cities=[]}=useQuery<{id:number;name:string;isActive?:boolean;shippingFee?:number;deliveryEstimate?:string}[]>({queryKey:['/api/cities']});
  const payload={items,cityId:Number(form.cityId),...credentials};
@@ -36,7 +37,7 @@ export default function CheckoutForm({items,source='chat',onSuccess,onPendingCha
  if(receipt)return <motion.div initial={reduced?false:{opacity:0,scale:.94}} animate={{opacity:1,scale:1}} className="rounded-3xl bg-emerald-50 dark:bg-emerald-950/30 p-6 text-center space-y-4" role="status"><CheckCircle2 className="h-16 w-16 mx-auto text-emerald-600"/><h3 className="text-xl font-bold">استلمنا طلبك بنجاح</h3><p>طلبك قيد المراجعة، والدفع عند الاستلام.</p><p className="font-bold">{receipt.orderNumber}</p>{receipt.items.map((it,i)=><p key={i}>{it.title} · {it.qty} قطعة</p>)}<p className="text-2xl font-bold">{money(receipt.totals.grandTotal)}</p><Button className="w-full rounded-full" onClick={()=>navigate(trackingURL(receipt))}>تتبع الطلب وتفاصيله</Button><ComplementProducts productId={productId}/></motion.div>;
  return <form className="space-y-2" onSubmit={e=>{e.preventDefault();setPhoneTouched(true);if(validPhone(form.customerPhone)&&quote&&!isFetching)order.mutate()}} dir="rtl"><fieldset className="space-y-3" disabled={order.isPending}><div className="grid grid-cols-2 gap-3">
  <label className="grid gap-1 text-sm">الاسم الكامل<Input required autoComplete="name" maxLength={120} value={form.customerName} onChange={e=>fields('customerName',e.target.value)}/></label>
- <label className="grid gap-1 text-sm">رقم الجوال<Input required type="tel" inputMode="tel" dir="ltr" autoComplete="tel" placeholder="05xxxxxxxx" value={form.customerPhone} onBlur={()=>setPhoneTouched(true)} aria-invalid={phoneTouched&&!validPhone(form.customerPhone)} aria-describedby="checkout-phone-error" onChange={e=>fields('customerPhone',e.target.value)}/>{phoneTouched&&!validPhone(form.customerPhone)&&<span id="checkout-phone-error" role="alert" className="text-destructive">اكتب رقم جوال سعودي: 05 ثم ٨ أرقام، أو +9665 ثم ٨ أرقام.</span>}</label>
+ <label className="grid gap-1 text-sm">رقم الجوال<Input required type="tel" inputMode="tel" dir="ltr" autoComplete="tel" placeholder="05xxxxxxxx" value={form.customerPhone} onBlur={()=>setPhoneTouched(true)} aria-invalid={phoneTouched&&!validPhone(form.customerPhone)} aria-describedby={phoneErrorId} onChange={e=>fields('customerPhone',e.target.value)}/>{phoneTouched&&!validPhone(form.customerPhone)&&<span id={phoneErrorId} role="alert" className="text-destructive">اكتب رقم جوال سعودي: 05 ثم ٨ أرقام، أو +9665 ثم ٨ أرقام.</span>}</label>
  <label className="grid gap-1 text-sm">المدينة<select className="border rounded-md px-2 h-10 w-full min-w-0 bg-background" required value={form.cityId} onChange={e=>fields('cityId',e.target.value)}><option value="">اختر المدينة</option>{cities.filter(c=>c.isActive!==false).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
  <label className="grid gap-1 text-sm">العنوان الوطني<Input required dir="ltr" placeholder="ABCD1234" pattern="[A-Za-z]{4}[0-9]{4}" maxLength={8} title="٤ أحرف إنجليزية ثم ٤ أرقام، من تطبيق سبل" value={form.nationalAddress} onChange={e=>fields('nationalAddress',e.target.value.toUpperCase().replace(/\s/g,''))}/></label>
  <label className="col-span-2 grid gap-1 text-sm">الحي والشارع ورقم المبنى<Input required autoComplete="street-address" value={form.addressRaw} onChange={e=>fields('addressRaw',e.target.value)}/></label></div>
