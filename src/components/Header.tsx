@@ -21,14 +21,15 @@ export default function Header({ onSearch, showSearch = false }: HeaderProps) {
   return (
     <>
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
-        <div className="max-w-7xl mx-auto px-4 py-3">
+        <div className="max-w-7xl mx-auto px-3 py-1">
           <div className="flex items-center justify-between gap-3">
             <button
               onClick={() => navigate("/")}
-              className="flex items-center gap-2 cursor-pointer"
+              className="flex min-h-11 items-center gap-2 cursor-pointer"
+              aria-label="فهد — الرئيسية"
               data-testid="link-home"
             >
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#CDEB63] to-[#a8d94a] flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#CDEB63] to-[#a8d94a] flex items-center justify-center">
                 <span className="text-sm font-bold text-[#1a2e05]">ف</span>
               </div>
               <span className="text-xl font-bold text-foreground">فهد</span>
@@ -39,6 +40,8 @@ export default function Header({ onSearch, showSearch = false }: HeaderProps) {
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="h-11 w-11"
+                  aria-label="البحث عن منتج"
                   onClick={() => setSearchOpen(true)}
                   data-testid="button-search-toggle"
                 >
@@ -49,7 +52,8 @@ export default function Header({ onSearch, showSearch = false }: HeaderProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative"
+                className="relative h-11 w-11"
+                aria-label={`سلة التسوق${totalItems > 0 ? `، ${totalItems} قطعة` : ""}`}
                 onClick={() => navigate("/cart")}
                 data-testid="button-cart"
               >

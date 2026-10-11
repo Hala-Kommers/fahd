@@ -5,15 +5,15 @@ import { Button } from '@/components/ui/button';
 import { engageChat, trackCommerce, type Receipt } from '@/lib/commerce';
 import OfferCards from './OfferCards';
 import CheckoutForm from './CheckoutForm';
-import { Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Loader2 } from 'lucide-react';
 
 export type CommercePanel = 'order' | 'offers' | 'policy';
 
 export default function ChatProductActions({ onOpen }: { onOpen: (panel: CommercePanel) => void }) {
   return <div className="grid grid-cols-3 gap-1.5" dir="rtl">
-    <Button className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white h-9 min-h-9 text-[11px] px-2" onClick={() => onOpen('order')}>طلب المنتج</Button>
-    <Button variant="outline" className="rounded-full h-9 min-h-9 text-[11px] px-2" onClick={() => onOpen('offers')}>أبي أعرف العروض</Button>
-    <Button variant="outline" className="rounded-full h-9 min-h-9 text-[11px] px-2" onClick={() => onOpen('policy')}>الاسترجاع والضمان</Button>
+    <Button className="chat-press rounded-full bg-emerald-600 hover:bg-emerald-700 text-white h-9 min-h-9 text-[11px] px-2" onClick={() => onOpen('order')}>طلب المنتج</Button>
+    <Button variant="outline" className="chat-press rounded-full h-9 min-h-9 text-[11px] px-2" onClick={() => onOpen('offers')}>أبي أعرف العروض</Button>
+    <Button variant="outline" className="chat-press rounded-full h-9 min-h-9 text-[11px] px-2" onClick={() => onOpen('policy')}>الاسترجاع والضمان</Button>
   </div>;
 }
 
@@ -78,10 +78,10 @@ export function ChatCommerceCard({ cardId, panel, productId, quantity: initialQu
   return <section dir="rtl" className="rounded-2xl border bg-card p-3 space-y-3 shadow-sm" aria-label={panelTitle} data-commerce-card={panel}>
     <div className="flex items-center justify-between gap-2">
       <h3 className="font-bold text-base">{panelTitle}</h3>
-      <Button type="button" variant="ghost" disabled={busy} className="h-8 px-2 text-xs" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'طي التفاصيل' : 'عرض التفاصيل'}</Button>
+      <Button type="button" variant="ghost" disabled={busy} className="chat-press h-8 px-2 text-xs" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'طي التفاصيل' : 'عرض التفاصيل'}<ChevronDown aria-hidden="true" className="chat-disclosure-icon h-3 w-3" /></Button>
     </div>
     {product && <p className="text-xs text-muted-foreground">{product.title}</p>}
-    <div hidden={!expanded} className="space-y-3">
+    <div hidden={!expanded} className="chat-card-content space-y-3">
       {!productId && <label className="grid gap-2 text-sm">المنتج<select disabled={busy || completed} className="border rounded-xl p-2 bg-background" value={activeId} onChange={e => { setChosenProduct(e.target.value); setSelection({ quantity: 1, variantId: '' }); }}><option value="">اختر المنتج</option>{products.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select></label>}
       {isFetching && !product && <Loader2 className="animate-spin" />}
       {error && <p role="alert">تعذر تحميل المنتج، حاول مرة أخرى.</p>}
@@ -94,10 +94,10 @@ export function ChatCommerceCard({ cardId, panel, productId, quantity: initialQu
         {panel === 'order' && <>
           {!completed && <div className="grid grid-cols-3 gap-2" aria-label="اختيار عرض الطلب">{quantities.map(q => {
             const price = getUnitPricingForQuantity(product, q, variant?.priceOverride).unitPrice;
-            return <button type="button" key={q} disabled={busy || q > stock} aria-pressed={q === quantity} onClick={() => choose(q)} className={`rounded-xl border p-2 text-center disabled:opacity-50 ${q === quantity ? 'border-emerald-600 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100' : 'bg-background'}`}>
+            return <button type="button" key={q} disabled={busy || q > stock} aria-pressed={q === quantity} onClick={() => choose(q)} className={`chat-press rounded-xl border p-2 text-center disabled:opacity-50 ${q === quantity ? 'border-emerald-600 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100' : 'bg-background'}`}>
               <span className="block text-xs">{q === 1 ? 'قطعة واحدة' : `${q} قطع`}</span>
               <strong className="block text-sm">{(price * q).toLocaleString('ar-SA')} ر.س</strong>
-              {q === quantity && <span className="text-[10px]">العرض المختار ✓</span>}
+              <span className="block h-4 text-[10px]">{q === quantity && <span className="chat-selection-pop inline-flex items-center gap-1">العرض المختار<Check className="h-3 w-3" aria-hidden="true" /></span>}</span>
             </button>;
           })}</div>}
           {completed || (quantity > 0 && quantity <= stock && (!product.hasVariants || variant))
