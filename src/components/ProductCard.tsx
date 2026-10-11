@@ -53,7 +53,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   return (
     <Card
-      className="overflow-visible rounded-[20px] border-card-border p-0 group transition-all duration-300 hover:-translate-y-1 hover:shadow-lg active:scale-[0.98]"
+      className="h-full flex flex-col overflow-visible rounded-2xl border-card-border p-0 group transition-all duration-300 hover:-translate-y-1 hover:shadow-lg active:scale-[0.98]"
       data-testid={`card-product-${product.id}`}
     >
       <div
@@ -62,11 +62,14 @@ export default function ProductCard({ product }: ProductCardProps) {
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") navigate(`/product/${product.id}`);
+          if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            navigate(`/product/${product.id}`);
+          }
         }}
         data-testid={`link-product-${product.id}`}
       >
-        <div className="relative overflow-hidden rounded-t-[20px] bg-muted/50 aspect-square">
+        <div className="relative overflow-hidden rounded-t-2xl bg-muted/50 aspect-[4/3]">
           {displayImage ? (
             <img
               src={displayImage}
@@ -78,14 +81,14 @@ export default function ProductCard({ product }: ProductCardProps) {
             <div className="w-full h-full flex items-center justify-center text-4xl text-muted-foreground">📦</div>
           )}
           {displayOldPrice && (
-            <div className="absolute top-3 left-3 bg-destructive text-destructive-foreground text-[11px] font-semibold px-2 py-0.5 rounded-full">
+            <div className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
               خصم {Math.round(((displayOldPrice - displayPrice) / displayOldPrice) * 100)}%
             </div>
           )}
           {product.category && (
             <Badge
               variant="secondary"
-              className="absolute bottom-3 right-3 text-[10px] no-default-hover-elevate"
+              className="absolute bottom-2 right-2 text-[10px] no-default-hover-elevate"
             >
               {product.category}
             </Badge>
@@ -93,31 +96,31 @@ export default function ProductCard({ product }: ProductCardProps) {
           <button
             type="button"
             onClick={copyProductId}
-            className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full bg-background/90 px-2.5 py-1 text-[11px] font-semibold text-foreground shadow-sm backdrop-blur border border-border/60"
+            aria-label={`نسخ رقم المنتج ${product.id}`}
+            className="absolute top-0 right-0 inline-flex min-h-11 min-w-11 items-start justify-center p-2 text-[10px] font-semibold text-foreground"
             data-testid={`button-copy-product-id-${product.id}`}
           >
-            <Copy className="w-3 h-3" />
-            ID {product.id}
+            <span className="inline-flex items-center gap-1 rounded-full bg-background/90 px-1.5 py-0.5 shadow-sm backdrop-blur border border-border/60"><Copy className="w-3 h-3" />ID {product.id}</span>
           </button>
         </div>
 
-        <div className="p-3 pb-2">
-          <h3 className="font-semibold text-sm leading-relaxed line-clamp-2 text-foreground mb-1">
+        <div className="p-2.5 pb-2 space-y-1">
+          <h3 className="font-semibold text-[13px] leading-5 min-h-10 line-clamp-2 text-foreground">
             {product.title}
           </h3>
-          <ProductRating product={p} />
-          <div className="flex items-center gap-2 flex-wrap">
+          <ProductRating product={p} compact />
+          <div className="flex items-baseline gap-1.5 flex-wrap">
             <span className="font-bold text-base text-foreground">{formatPrice(displayPrice)}</span>
             {displayOldPrice && (
-              <span className="text-xs text-muted-foreground line-through">{formatPrice(displayOldPrice)}</span>
+              <span className="text-[11px] text-muted-foreground line-through">{formatPrice(displayOldPrice)}</span>
             )}
           </div>
         </div>
       </div>
 
-      <div className="px-3 pb-3 flex gap-2">
+      <div className="px-2.5 pb-2.5 mt-auto flex gap-1.5">
           <Button
-            className="flex-1 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-semibold min-h-[44px]"
+            className="min-w-0 flex-1 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-semibold text-xs px-1 min-h-[44px]"
             onClick={(e) => {
               e.stopPropagation();
               setChatProductContext({
@@ -129,13 +132,14 @@ export default function ProductCard({ product }: ProductCardProps) {
             }}
             data-testid={`button-order-${product.id}`}
           >
-          اطلبه الحين
+          اطلب الآن
         </Button>
         <Button
           variant="outline"
           size="icon"
           onClick={handleAddToCart}
-          className="min-h-[44px] min-w-[44px]"
+          className="shrink-0 rounded-xl min-h-[44px] min-w-[44px]"
+          aria-label={`أضف ${product.title} للسلة`}
           data-testid={`button-addcart-${product.id}`}
         >
           <ShoppingCart className="w-4 h-4" />

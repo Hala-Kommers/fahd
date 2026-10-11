@@ -386,3 +386,78 @@
   background-repeat: repeat;
 }
 .dark .saudi-chat-pattern { background-color: #17271f; }
+
+/* Small interaction cues: only transforms/opacity animate during chat activity. */
+.chat-press {
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+.chat-message-input { transition: border-color 180ms ease, box-shadow 180ms ease; }
+.chat-message-input:focus-visible { border-color: #059669; box-shadow: 0 0 0 3px #0596691a; }
+.chat-send-button[data-ready="true"] { background-color: #059669; border-color: #047857; color: white; }
+.chat-disclosure-icon { transition: transform 180ms ease; }
+[aria-expanded="true"] > .chat-disclosure-icon { transform: rotate(180deg); }
+.chat-typing-dots { display: inline-flex; align-items: center; gap: 4px; height: 16px; }
+.chat-typing-dots i { width: 5px; height: 5px; border-radius: 50%; background: #059669; }
+.chat-streaming-text::after { content: ''; display: inline-block; width: 4px; height: 12px; margin-inline-start: 4px; border-radius: 2px; background: #059669; vertical-align: middle; }
+.chat-offer-arrow { transition: transform 180ms ease; }
+.checkout-success-mark { position: relative; width: 72px; height: 72px; margin-inline: auto; }
+.checkout-success-seal { position: absolute; inset: 6px; border-radius: 50%; display: grid; place-items: center; color: white; background: linear-gradient(145deg,#10b981,#047857); }
+.checkout-success-seal svg { width: 40px; height: 40px; }
+.checkout-success-ring { position: absolute; inset: 0; border: 1px solid #10b98155; border-radius: 50%; }
+.checkout-spark { position: absolute; inset: 0; pointer-events: none; }
+.checkout-spark i { display: block; position: absolute; inset-inline-start: 34px; top: 0; height: 6px; width: 4px; border-radius: 2px; background: #84cc16; opacity: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chat-press:active:not(:disabled) { transform: scale(.96); }
+  .chat-message-enter { animation: chat-message-arrive 280ms cubic-bezier(.2,.8,.2,1) both; }
+  .chat-message-enter[data-sender="user"] { animation-name: chat-sent-arrive; }
+  .chat-chip-enter { animation: chat-message-arrive 240ms ease backwards; }
+  .chat-card-content:not([hidden]) { animation: chat-details-reveal 180ms ease; }
+  .chat-selection-pop { animation: chat-selection-confirm 300ms cubic-bezier(.2,.8,.2,1); }
+  .chat-typing-dots i { animation: chat-typing-hop 1s ease-in-out infinite; }
+  .chat-typing-dots i:nth-child(2) { animation-delay: 120ms; }
+  .chat-typing-dots i:nth-child(3) { animation-delay: 240ms; }
+  .chat-streaming-text::after { animation: chat-cursor 900ms ease-in-out infinite; }
+  .chat-send-button[data-ready="true"] svg { transform: rotate(-12deg); }
+  .chat-send-button svg { transition: transform 180ms ease; }
+  [data-celebrate="true"] .checkout-success-seal { animation: chat-selection-confirm 450ms ease-out; }
+  [data-celebrate="true"] .checkout-success-seal path { stroke-dasharray: 1; animation: checkout-check-draw 400ms 160ms ease both; }
+  [data-celebrate="true"] .checkout-success-ring { animation: checkout-ring 700ms 100ms ease-out; }
+  [data-celebrate="true"] .checkout-spark i { animation: checkout-spark 700ms 150ms ease-out both; }
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .chat-press:hover:not(:disabled) { transform: translateY(-1px); }
+  .chat-press:active:not(:disabled) { transform: scale(.96); }
+  .group:hover:not(:disabled) .chat-offer-arrow { transform: translateX(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-press, .chat-message-input, .chat-disclosure-icon, .chat-offer-arrow { transition: none; }
+  .chat-ui .animate-fade-in-up, .chat-ui .animate-fade-in, .chat-ui .animate-scale-in,
+  .chat-ui .animate-spin, .chat-ui .chat-benefits-ticker { animation: none; }
+}
+@keyframes chat-message-arrive {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes chat-sent-arrive {
+  from { opacity: 0; transform: translate(-6px,6px); }
+  to { opacity: 1; transform: translate(0,0); }
+}
+@keyframes chat-details-reveal { from { opacity: .4; } to { opacity: 1; } }
+@keyframes chat-selection-confirm {
+  0% { transform: scale(.8); opacity: .4; }
+  65% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes chat-typing-hop {
+  0%, 60%, 100% { transform: translateY(0); opacity: .4; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+@keyframes chat-cursor { 50% { opacity: .15; } }
+@keyframes checkout-check-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes checkout-ring { 50% { transform: scale(1.25); opacity: .2; } }
+@keyframes checkout-spark {
+  0% { transform: translateY(8px) scale(.5); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translateY(-20px) scale(.4); opacity: 0; }
+}

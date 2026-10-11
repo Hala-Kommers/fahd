@@ -212,42 +212,54 @@ export default function ProductDetail() {
       <Header />
 
       <main className="max-w-3xl mx-auto">
-        <div className="px-4 py-3">
+        <div className="px-3 flex items-center justify-between gap-2">
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-1 text-sm text-muted-foreground mb-4 min-h-[44px]"
+            className="flex items-center gap-1 text-xs text-muted-foreground min-h-[44px]"
             data-testid="button-back"
           >
             <ArrowRight className="w-4 h-4" />
             <span>رجوع</span>
           </button>
+          <button
+            type="button"
+            onClick={copyProductId}
+            className="inline-flex min-h-11 items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+            aria-label={`نسخ رقم المنتج ${product.id}`}
+            data-testid="button-copy-product-id"
+          >
+            <Copy className="w-3 h-3" />
+            رقم المنتج: {product.id}
+          </button>
         </div>
 
-        <div className="bg-muted/30 rounded-[24px] mx-4 overflow-hidden mb-4 animate-fade-in">
+        <div className="bg-muted/30 rounded-2xl mx-3 overflow-hidden mb-3 animate-fade-in">
           {selectedDisplayImage ? (
             <img
               key={selectedDisplayImage}
               src={selectedDisplayImage}
               alt={product.title}
-              className="w-full aspect-square object-cover animate-fade-in"
+              className="w-full h-[clamp(180px,28svh,240px)] object-cover object-center animate-fade-in"
               decoding="async" fetchPriority="high" width={800} height={800} data-testid="img-product-main"
             />
           ) : (
-            <div className="w-full aspect-square flex items-center justify-center text-muted-foreground text-6xl">
+            <div className="w-full h-[clamp(180px,28svh,240px)] flex items-center justify-center text-muted-foreground text-6xl">
               📦
             </div>
           )}
         </div>
 
         {hasMultipleImages && (
-          <div className="px-4 mb-4">
+          <div className="px-3 mb-3">
             <div className="flex gap-2 overflow-x-auto pb-1">
               {productImages.map((image, index) => (
                 <button
                   key={`${image}-${index}`}
                   type="button"
                   onClick={() => setSelectedImageIdx(index)}
-                  className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition-all ${selectedImageIdx === index ? "border-[#CDEB63] scale-105" : "border-transparent opacity-70"}`}
+                  aria-label={`عرض صورة المنتج ${index + 1}`}
+                  aria-pressed={selectedImageIdx === index}
+                  className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${selectedImageIdx === index ? "border-[#CDEB63] scale-105" : "border-transparent opacity-70"}`}
                   data-testid={`thumbnail-product-${index}`}
                 >
                   <img loading="lazy" decoding="async" src={image} alt={`${product.title} ${index + 1}`} className="h-full w-full object-cover" />
@@ -257,28 +269,17 @@ export default function ProductDetail() {
           </div>
         )}
 
-        <div className="px-4 space-y-4 animate-slide-up-spring">
+        <div className="px-3 space-y-3 animate-slide-up-spring">
           <div>
-            <div className="mb-2">
-              <button
-                type="button"
-                onClick={copyProductId}
-                className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
-                data-testid="button-copy-product-id"
-              >
-                <Copy className="w-3 h-3" />
-                رقم المنتج: {product.id}
-              </button>
-            </div>
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <ProductRating product={product} />
-              <span className="text-xs text-muted-foreground">({displayStock} متوفر)</span>
-            </div>
-            <h1 className="text-xl font-bold text-foreground leading-relaxed" data-testid="text-product-title">
+            <h1 className="text-lg font-bold text-foreground leading-7" data-testid="text-product-title">
               {product.title}
             </h1>
-            <div className="flex items-center gap-3 mt-2 flex-wrap">
-              <span className="text-2xl font-bold text-foreground" data-testid="text-product-price">
+            <div className="flex items-center justify-between gap-2 mt-1">
+              <ProductRating product={product} compact />
+              <span className="shrink-0 text-[11px] text-muted-foreground">{displayStock > 0 ? `${displayStock} متوفر` : "غير متوفر"}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <span className="text-xl font-bold text-foreground" data-testid="text-product-price">
                 {formatPrice(displayPrice)}
               </span>
               {hasVariantPriceOverride && (
@@ -287,7 +288,7 @@ export default function ProductDetail() {
                 </Badge>
               )}
               {displayOldPrice && (
-                <span className="text-base text-muted-foreground line-through">
+                <span className="text-xs text-muted-foreground line-through">
                   {formatPrice(displayOldPrice)}
                 </span>
               )}
@@ -300,7 +301,7 @@ export default function ProductDetail() {
           </div>
 
           {displayBadges.length > 0 ? (
-            <div className="flex gap-2 overflow-x-auto pb-1 flex-wrap">
+            <div className="flex gap-1.5 flex-wrap">
               {displayBadges.map((badge: string) => {
                 const icon =
                   badge.includes("شحن") ? <Truck className="w-3 h-3" /> :
@@ -310,7 +311,7 @@ export default function ProductDetail() {
                   <Badge
                     key={badge}
                     variant="outline"
-                    className="shrink-0 text-xs gap-1 no-default-hover-elevate"
+                    className="text-[11px] gap-1 px-2 no-default-hover-elevate"
                   >
                     {icon}
                     {badge}
@@ -319,16 +320,16 @@ export default function ProductDetail() {
               })}
             </div>
           ) : (
-            <div className="flex gap-2 flex-wrap">
-              <Badge variant="outline" className="shrink-0 text-xs gap-1 no-default-hover-elevate">
+            <div className="flex gap-1.5 flex-wrap">
+              <Badge variant="outline" className="text-[11px] gap-1 px-2 no-default-hover-elevate">
                 <Truck className="w-3 h-3" />
                 الشحن حسب المدينة
               </Badge>
-              <Badge variant="outline" className="shrink-0 text-xs gap-1 no-default-hover-elevate">
+              <Badge variant="outline" className="text-[11px] gap-1 px-2 no-default-hover-elevate">
                 <CreditCard className="w-3 h-3" />
                 الدفع عند الاستلام
               </Badge>
-              <Badge variant="outline" className="shrink-0 text-xs gap-1 no-default-hover-elevate">
+              <Badge variant="outline" className="text-[11px] gap-1 px-2 no-default-hover-elevate">
                 <ShieldCheck className="w-3 h-3" />
                 تفاصيل الضمان أدناه
               </Badge>
@@ -455,24 +456,28 @@ export default function ProductDetail() {
             </div>
           ) : showTierPricing ? (
             <div>
-              <h3 className="text-sm font-semibold mb-2">اختر الكمية</h3>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h3 className="text-sm font-semibold">اختر عرضك</h3>
+                <span className="text-[11px] text-muted-foreground">السعر للقطعة</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
                 {pricingTiers.map((tier, i) => (
                   <button
                     key={i}
                     onClick={() => setSelectedTierIdx(i)}
-                    className={`px-4 py-3 rounded-xl border text-sm transition-all text-right min-w-[100px] min-h-[44px] active:scale-95 ${
+                    aria-pressed={i === selectedTierIdx}
+                    className={`px-2 py-2 rounded-xl border text-xs transition-all text-right min-w-0 min-h-[44px] active:scale-95 ${
                       i === selectedTierIdx
                         ? "border-[#CDEB63] bg-[#CDEB63]/10"
                         : "border-border bg-card"
                     }`}
                     data-testid={`chip-tier-${tier.qty}`}
                   >
-                    <div className="font-semibold">{tier.label || `${tier.qty} قطعة`}</div>
+                    <div className="font-semibold leading-5">{tier.label || `${tier.qty} قطعة`}</div>
                     {tier.originalPrice > tier.finalPrice && (
-                      <div className="text-xs text-muted-foreground line-through">{formatPrice(tier.originalPrice)}</div>
+                      <div className="text-[11px] text-muted-foreground line-through">{formatPrice(tier.originalPrice)}</div>
                     )}
-                    <div className="text-base font-bold text-foreground">{formatPrice(tier.finalPrice)}</div>
+                    <div className="text-sm font-bold text-foreground">{formatPrice(tier.finalPrice)}</div>
                   </button>
                 ))}
               </div>
@@ -508,7 +513,7 @@ export default function ProductDetail() {
             </div>
           )}
 
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion type="single" collapsible className="w-full [&_h3>button]:py-2.5 [&_h3>button]:min-h-11">
             <AccordionItem value="features">
               <AccordionTrigger className="text-sm font-semibold" data-testid="accordion-features">
                 وش يميزه؟
@@ -565,12 +570,13 @@ export default function ProductDetail() {
  {reviews.length>0&&<section className="p-4 space-y-3"><h2 className="font-bold">تجارب من مشتريات مستلمة</h2>{reviews.map((r:any,i:number)=><article key={i} className="border rounded-xl p-3"><b>{r.displayName} · {r.rating}/5</b><p>{r.body}</p></article>)}</section>}
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-xl border-t border-border/50 p-3">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-xl border-t border-border/50 px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <div className="max-w-3xl mx-auto flex gap-2">
               <Button
                 variant="outline"
                 size="icon"
-                className="shrink-0 rounded-xl min-h-[48px] min-w-[48px]"
+                className="shrink-0 rounded-xl min-h-[44px] min-w-[44px]"
+                aria-label="أضف المنتج للسلة"
               onClick={() => {
                 if (variantOptionNames.length > 0 && !selectedVariant) {
                   toast({ title: "اختر الخيارات أولاً", variant: "destructive" });
@@ -599,7 +605,7 @@ export default function ProductDetail() {
             <ShoppingCart className="w-5 h-5" />
           </Button>
             <Button
-              className="flex-1 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-bold text-base gap-2 min-h-[48px]"
+              className="flex-1 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-bold text-sm gap-2 min-h-[44px]"
             onClick={handleOrderNow}
               data-testid="button-order-now"
             >

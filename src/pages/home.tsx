@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MessageCircle, SlidersHorizontal, ChevronDown, X, Headphones, Watch, Gem, Briefcase, Camera, Gamepad2, Lightbulb, LayoutGrid, Sparkles, Leaf, Gift, Paintbrush } from "lucide-react";
+import { MessageCircle, SlidersHorizontal, ChevronDown, ArrowLeft, X, Headphones, Watch, Gem, Briefcase, Camera, Gamepad2, Lightbulb, LayoutGrid, Sparkles, Leaf, Gift, Paintbrush } from "lucide-react";
 import Header from "@/components/Header";
 import ProductCard from "@/components/ProductCard";
 import type { Product, Category } from "@shared/schema";
@@ -81,30 +81,24 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       <Header onSearch={setSearchQuery} showSearch />
 
-      <main className="max-w-7xl mx-auto px-4 pb-24">
-        <div className="py-6">
-          <Card className="animate-fade-in-up overflow-hidden rounded-[24px] border-0 relative bg-gradient-to-bl from-[#e8f5d4] via-[#f0f9e8] to-[#dff0d0] dark:from-[#1a2e10] dark:via-[#1e3315] dark:to-[#152a0c] p-6 ">
-            <div className="relative z-10">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#CDEB63] to-[#a8d94a] flex items-center justify-center mb-4 shadow-lg">
-                <span className="text-2xl font-bold text-[#1a2e05]">ف</span>
+      <main className="max-w-7xl mx-auto px-3 pb-20">
+        <div className="py-3" data-testid="home-intro">
+          <Card className="animate-fade-in-up overflow-hidden rounded-2xl border-0 relative bg-gradient-to-bl from-[#e8f5d4] via-[#f0f9e8] to-[#dff0d0] dark:from-[#1a2e10] dark:via-[#1e3315] dark:to-[#152a0c] p-3.5 shadow-none">
+            <div className="relative z-10 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-lg font-bold text-foreground leading-7">اختيارك أسهل مع فهد</h1>
+                <p className="text-muted-foreground text-xs leading-5 mt-0.5">قارن العروض واختر اللي يناسبك.</p>
               </div>
-              <h1 className="text-2xl font-bold text-foreground mb-2 leading-tight">
-                يالله نبدأ..
-                <br />
-                وش تبي تشتري؟ 🛒
-              </h1>
-              <p className="text-muted-foreground text-sm mb-5 max-w-md">
-                تسوّق براحتك وفهد معك خطوة بخطوة — من الاختيار للتوصيل لين باب بيتك!
-              </p>
               <Button
-                className="rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-semibold px-6 min-h-[44px]"
+                className="shrink-0 rounded-xl bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] font-semibold text-xs gap-1.5 px-3 min-h-[44px]"
                 onClick={() => {
                   const el = document.getElementById("products-grid");
-                  el?.scrollIntoView({ behavior: "smooth" });
+                  el?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
                 }}
                 data-testid="button-start-shopping"
               >
-                يالله نتسوق
+                تصفّح المنتجات
+                <ArrowLeft className="h-3.5 w-3.5" />
               </Button>
             </div>
             <div className="absolute left-0 bottom-0 w-40 h-40 bg-[#CDEB63]/10 rounded-full blur-3xl animate-float" />
@@ -112,8 +106,8 @@ export default function Home() {
           </Card>
         </div>
 
-        <div className="mb-4 overflow-x-auto scrollbar-hide -mx-4 px-4 animate-fade-in" style={{ animationDelay: "0.15s" }}>
-          <div className="flex gap-2 min-w-max">
+        <div className="mb-2 overflow-x-auto scrollbar-hide -mx-3 px-3 animate-fade-in" style={{ animationDelay: "0.15s" }}>
+          <div className="flex gap-1.5 min-w-max">
             {allCategories.map((cat, idx) => {
               const IconComp = cat.icon === "LayoutGrid" ? LayoutGrid : iconMap[cat.icon] || LayoutGrid;
               const isActive = activeCategory === cat.filterValue;
@@ -121,7 +115,8 @@ export default function Home() {
                 <button
                   key={cat.filterValue}
                   onClick={() => setActiveCategory(cat.filterValue)}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap min-h-[44px] active:scale-95 ${isActive
+                  aria-pressed={isActive}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap min-h-[44px] active:scale-95 ${isActive
                       ? "bg-[#CDEB63] text-[#1a2e05]"
                       : "bg-card border border-card-border text-foreground"
                     }`}
@@ -141,9 +136,9 @@ export default function Home() {
           </div>
         </div>
 
-        <div id="products-grid">
-          <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-            <h2 className="text-lg font-bold text-foreground">
+        <div id="products-grid" className="scroll-mt-16">
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <h2 className="text-base font-bold text-foreground">
               {searchQuery ? `نتائج البحث "${searchQuery}"` : activeCategory !== "الكل" ? activeCategoryLabel : "المنتجات"}
               {!isLoading && (
                 <span className="text-sm font-normal text-muted-foreground mr-2">
@@ -152,17 +147,18 @@ export default function Home() {
               )}
             </h2>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {hasActiveFilters && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={clearFilters}
-                  className="text-xs text-muted-foreground gap-1 min-h-[44px]"
+                  className="text-xs text-muted-foreground gap-1 min-h-[44px] px-2"
+                  aria-label="مسح الفلاتر"
                   data-testid="button-clear-filters"
                 >
                   <X className="w-3 h-3" />
-                  مسح الفلاتر
+                  مسح
                 </Button>
               )}
 
@@ -171,14 +167,16 @@ export default function Home() {
                   variant="outline"
                   size="sm"
                   onClick={() => { setShowSortMenu(!showSortMenu); setShowFilters(false); }}
-                  className="text-xs gap-1 min-h-[44px]"
+                  className="text-xs gap-1 min-h-[44px] px-2"
+                  aria-label={`ترتيب المنتجات: ${sortLabels[sortBy]}`}
+                  aria-expanded={showSortMenu}
                   data-testid="button-sort"
                 >
                   <ChevronDown className="w-3 h-3" />
-                  {sortLabels[sortBy]}
+                  {sortBy === "updated_desc" ? "الأحدث" : sortLabels[sortBy]}
                 </Button>
                 {showSortMenu && (
-                  <div className="absolute top-full right-0 mt-1 z-30 bg-card border border-card-border rounded-xl shadow-lg p-1 min-w-[160px] animate-scale-in origin-top-right">
+                  <div className="absolute top-full left-0 mt-1 z-30 bg-card border border-card-border rounded-xl shadow-lg p-1 min-w-[160px] animate-scale-in origin-top-left">
                     {(Object.entries(sortLabels) as [SortOption, string][]).map(([key, label]) => (
                       <button
                         key={key}
@@ -198,7 +196,8 @@ export default function Home() {
                 variant="outline"
                 size="sm"
                 onClick={() => { setShowFilters(!showFilters); setShowSortMenu(false); }}
-                className="text-xs gap-1 min-h-[44px]"
+                className="text-xs gap-1 min-h-[44px] px-2"
+                aria-expanded={showFilters}
                 data-testid="button-filter"
               >
                 <SlidersHorizontal className="w-3 h-3" />
@@ -236,7 +235,7 @@ export default function Home() {
                   />
                 </div>
               </div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex flex-wrap gap-2 mt-3">
                 {[
                   { label: "أقل من 200", range: [0, 200] as [number, number] },
                   { label: "200 - 500", range: [200, 500] as [number, number] },
@@ -260,10 +259,10 @@ export default function Home() {
           )}
 
           {isLoading ? (
-            <div className="grid grid-cols-2 gap-3 ">
+            <div className="grid grid-cols-2 gap-2">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Card key={i} className="rounded-[20px] p-0 overflow-hidden">
-                  <Skeleton className="aspect-square w-full" />
+                <Card key={i} className="rounded-2xl p-0 overflow-hidden">
+                  <Skeleton className="aspect-[4/3] w-full" />
                   <div className="p-3 space-y-2">
                     <Skeleton className="h-4 w-3/4" />
                     <Skeleton className="h-3 w-1/2" />
@@ -282,12 +281,12 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 ">
+            <div className="grid grid-cols-2 gap-2">
               {products.map((product, idx) => (
                 <div
                   key={product.id}
                   style={{ animationDelay: `${idx * 0.06}s` }}
-                  className="animate-fade-in-up"
+                  className="min-w-0 animate-fade-in-up"
                 >
                   <ProductCard product={product} />
                 </div>
@@ -303,7 +302,7 @@ export default function Home() {
 
       <button
         onClick={() => navigate("/chat")}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 bg-[#CDEB63] text-[#1a2e05] px-5 py-3 rounded-full font-semibold text-sm animate-pulse-soft min-h-[44px]"
+        className="fixed bottom-3 right-3 z-40 flex items-center gap-1.5 bg-[#CDEB63] text-[#1a2e05] px-3 py-2 rounded-full font-semibold text-xs shadow-md animate-pulse-soft min-h-[44px]"
         data-testid="button-chat-float"
       >
         <MessageCircle className="w-5 h-5" />

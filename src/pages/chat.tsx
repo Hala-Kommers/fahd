@@ -1,5 +1,6 @@
 
 import { useState, useRef, useEffect, useCallback, Fragment, type ReactNode } from "react";
+import { useReducedMotion } from "framer-motion";
 import ProductRating from "@/components/ProductRating";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -515,6 +516,7 @@ function ProductContextCard({
 }
 
 export default function ChatPage() {
+  const reduceMotion = useReducedMotion();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { chatProductContext, clearChatProductContext } = useFahd();
@@ -837,8 +839,8 @@ export default function ChatPage() {
   }, [messages, sessionId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+    messagesEndRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+  }, [messages, isTyping, reduceMotion]);
 
   useEffect(() => {
     return () => {
@@ -897,7 +899,7 @@ export default function ChatPage() {
   const canSend = isConnected && isHistoryLoaded;
 
   return (
-    <div className="h-[100dvh] min-h-0 overflow-hidden bg-background flex flex-col">
+    <div className="chat-ui h-[100dvh] min-h-0 overflow-hidden bg-background flex flex-col">
       <header className="shrink-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
         <div className="max-w-2xl mx-auto px-3 py-0.5 flex items-center gap-2">
           <button onClick={() => navigate("/")} className="text-muted-foreground min-w-[44px] min-h-[44px] flex items-center justify-center" data-testid="button-chat-back">
@@ -964,7 +966,7 @@ export default function ChatPage() {
 
           <div className="space-y-3">
             {messages.map((msg, messageIndex) => (
-              <div key={msg.id} className="animate-fade-in-up" data-chat-message={msg.id}>
+              <div key={msg.id} className="chat-message-enter" data-sender={msg.sender} data-chat-message={msg.id}>
                 {msg.commerce ? <ChatCommerceCard cardId={msg.id} {...msg.commerce} onChoose={(quantity, productId, variantId) => openCommerce('order', quantity, productId, variantId)} /> : <>
                 <div className={`flex gap-2 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}>
                   {msg.sender === "fahd" && (
@@ -981,7 +983,7 @@ export default function ChatPage() {
                     >
                       {msg.sender === "fahd" ? (
                         isTyping && msg.id === typingMessageIdRef.current ? (
-                          <div className="whitespace-pre-wrap">{msg.text}</div>
+                          <div className="chat-streaming-text whitespace-pre-wrap">{msg.text}</div>
                         ) : (
                           <MarkdownMessage text={msg.text} />
                         )
@@ -1003,8 +1005,8 @@ export default function ChatPage() {
                     )}
                     {msg.sender === "fahd" && messageIndex === messages.length - 1 && !isTyping && (
                       <div className="flex flex-wrap gap-1.5" aria-label="اختيارات سريعة للمحادثة">
-                        {(msg.actions || []).filter((action): action is Extract<ChatAction, { type: 'quick_reply' }> => action.type === 'quick_reply').slice(0, 3).map(({ payload: choice }) => (
-                          <button key={choice.label} type="button" disabled={!canSend || isTyping} onClick={() => handleQuickChipClick(choice.message)} className="rounded-full border border-[#CDEB63]/70 bg-[#CDEB63]/10 px-3 py-2 text-[11px] font-medium hover:bg-[#CDEB63]/25 active:scale-95 transition disabled:opacity-50">
+                        {(msg.actions || []).filter((action): action is Extract<ChatAction, { type: 'quick_reply' }> => action.type === 'quick_reply').slice(0, 3).map(({ payload: choice }, choiceIndex) => (
+                          <button key={choice.label} type="button" style={{ animationDelay: `${choiceIndex * 60}ms` }} disabled={!canSend || isTyping} onClick={() => handleQuickChipClick(choice.message)} className="chat-press chat-chip-enter rounded-full border border-[#CDEB63]/70 bg-[#CDEB63]/10 px-3 py-2 text-[11px] font-medium hover:bg-[#CDEB63]/25 disabled:opacity-50">
                             {choice.label}
                           </button>
                         ))}
@@ -1019,14 +1021,15 @@ export default function ChatPage() {
               </div>
             ))}
 
-            {isTyping && (
-              <div className="flex gap-2 animate-fade-in">
+            {isTyping && !messages.some(msg => msg.id === typingMessageIdRef.current && msg.text) && (
+              <div className="chat-message-enter flex gap-2" role="status" aria-label="فهد يكتب الآن">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#CDEB63] to-[#a8d94a] flex items-center justify-center shrink-0">
                   <span className="text-[10px] font-bold text-[#1a2e05]">ف</span>
                 </div>
                 <div className="bg-card border border-card-border shadow-sm rounded-2xl rounded-tr-md px-4 py-3">
-                  <div className="flex gap-1">
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground" aria-hidden="true">
+                    <span>فهد يكتب</span>
+                    <span className="chat-typing-dots"><i /><i /><i /></span>
                   </div>
                 </div>
               </div>
@@ -1046,14 +1049,16 @@ export default function ChatPage() {
                 placeholder="اكتب لفهد هنا..."
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                 disabled={!canSend || isTyping}
-                className="flex-1 rounded-full bg-card border-card-border h-10 min-h-10 text-base"
+                className="chat-message-input flex-1 rounded-full bg-card border-card-border h-10 min-h-10 text-base"
                 data-testid="input-chat-message"
               />
               <Button
                 size="icon"
                 onClick={() => sendMessage()}
-                disabled={!canSend || isTyping}
-                className="rounded-full bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] shrink-0 min-h-[44px] min-w-[44px]"
+                disabled={!canSend || isTyping || !inputText.trim()}
+                aria-label="إرسال الرسالة"
+                data-ready={!!inputText.trim() && !isTyping && canSend}
+                className="chat-press chat-send-button rounded-full bg-[#CDEB63] text-[#1a2e05] border-[#b8d44e] shrink-0 min-h-[44px] min-w-[44px]"
                 data-testid="button-send-message"
               >
                 <Send className="w-4 h-4" />
