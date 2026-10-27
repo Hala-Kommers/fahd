@@ -9,6 +9,8 @@ import { formatPrice } from "@/lib/mockData";
 import { useFahd } from "@/lib/fahd-store";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { getPurchaseOffers, getTierTotal } from "@/lib/pricing";
+import { useQuery } from "@tanstack/react-query";
 
 interface ProductCardProps {
   product: Product;
@@ -20,9 +22,21 @@ export default function ProductCard({ product }: ProductCardProps) {
   const { toast } = useToast();
 
   const p = product as any;
+  const { data: bundleDetails } = useQuery<any>({
+    queryKey: ["/api/products", product.id],
+    enabled: Boolean(p.bundleOnly && p.startingPrice == null),
+    staleTime: 5 * 60 * 1000,
+  });
   const displayImage = p.primaryImage || p.images?.find((img: any) => img?.isPrimary)?.url || p.images?.[0]?.url || p.image || "";
-  const displayPrice = p.pricing?.price ?? p.price ?? 0;
-  const displayOldPrice = p.pricing?.compareAt ?? p.compareAt ?? p.oldPrice ?? null;
+  const firstOffer = p.bundleOnly ? getPurchaseOffers(bundleDetails ?? p)[0] : null;
+  const startingQty = p.bundleOnly ? p.startingQty ?? firstOffer?.qty : null;
+  const displayPrice = p.bundleOnly && p.startingPrice != null
+    ? p.startingPrice
+    : firstOffer ? getTierTotal(firstOffer) : p.bundleOnly ? null : p.pricing?.price ?? p.price ?? 0;
+  const displayOldPrice = p.bundleOnly && p.startingCompareAt != null
+    ? p.startingCompareAt
+    : firstOffer ? firstOffer.originalPrice * firstOffer.qty
+    : p.pricing?.compareAt ?? p.compareAt ?? p.oldPrice ?? null;
   const hasVariants = p.hasVariants || (p.variantOptions?.length ?? 0) > 0 || (p.variants?.length ?? 0) > 0;
   const firstColor = p.variants?.colors?.[0]?.name
     || (p.variants ?? []).find((v: any) => v.attributes?.color)?.attributes?.color
@@ -39,8 +53,8 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (hasVariants) {
-      toast({ title: "اختر الخيارات أولاً", description: product.title, variant: "destructive" });
+    if (hasVariants || p.bundleOnly) {
+      toast({ title: p.bundleOnly ? "اختر باقتك أولاً" : "اختر الخيارات أولاً", description: product.title, variant: "destructive" });
       navigate(`/product/${product.id}`);
       return;
     }
@@ -69,7 +83,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         }}
         data-testid={`link-product-${product.id}`}
       >
-        <div className="relative overflow-hidden rounded-t-2xl bg-muted/50 aspect-[4/3]">
+        <div className="relative overflow-hidden rounded-t-2xl bg-muted/50 aspect-[3/2]">
           {displayImage ? (
             <img
               src={displayImage}
@@ -80,7 +94,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           ) : (
             <div className="w-full h-full flex items-center justify-center text-4xl text-muted-foreground">📦</div>
           )}
-          {displayOldPrice && (
+          {displayPrice != null && displayOldPrice && displayOldPrice > displayPrice && (
             <div className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
               خصم {Math.round(((displayOldPrice - displayPrice) / displayOldPrice) * 100)}%
             </div>
@@ -104,14 +118,15 @@ export default function ProductCard({ product }: ProductCardProps) {
           </button>
         </div>
 
-        <div className="p-2.5 pb-2 space-y-1">
-          <h3 className="font-semibold text-[13px] leading-5 min-h-10 line-clamp-2 text-foreground">
+        <div className="px-2.5 pt-2.5 pb-1.5 space-y-1">
+          <h3 className="font-semibold text-[13px] leading-[18px] min-h-9 line-clamp-2 text-foreground">
             {product.title}
           </h3>
           <ProductRating product={p} compact />
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="font-bold text-base text-foreground">{formatPrice(displayPrice)}</span>
-            {displayOldPrice && (
+          <div className="flex items-baseline gap-1.5 flex-wrap pt-0.5">
+            {startingQty && <span className="text-[11px] text-muted-foreground">باقة {startingQty} قطع</span>}
+            <span className="font-bold text-base text-foreground">{displayPrice == null ? "اختر باقتك" : formatPrice(displayPrice)}</span>
+            {displayPrice != null && displayOldPrice && displayOldPrice > displayPrice && (
               <span className="text-[11px] text-muted-foreground line-through">{formatPrice(displayOldPrice)}</span>
             )}
           </div>

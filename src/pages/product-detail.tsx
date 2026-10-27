@@ -13,9 +13,17 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Minus, Plus, Truck, CreditCard, ShieldCheck, ArrowRight, ShoppingCart, Copy } from "lucide-react";
+import { Minus, Plus, Truck, CreditCard, ShieldCheck, ArrowRight, ShoppingCart, Copy, MessageCircle } from "lucide-react";
 import ProductRating from "@/components/ProductRating";
+import { getTierTotal, getUnitPricingForQuantity, type PricingTier } from "@/lib/pricing";
 import { useEffect, useState } from "react";
+
+function formatOfferUnitPrice(tier: PricingTier): string {
+  const total = getTierTotal(tier);
+  const roundedUnit = Math.round((total / tier.qty) * 100) / 100;
+  const approximate = Math.abs(roundedUnit * tier.qty - total) > 0.005;
+  return `${approximate ? "حوالي " : ""}${formatPrice(roundedUnit)} للقطعة`;
+}
 
 export default function ProductDetail() {
   const params = useParams<{ id: string }>();
@@ -129,32 +137,30 @@ export default function ProductDetail() {
       </div>
     );
   }
-  const pricingTiers: { qty: number; label?: string; originalPrice: number; finalPrice: number }[] = product.pricingTiers ?? [];
+  const pricingTiers: PricingTier[] = product.pricingTiers ?? [];
   const selectedVariantPriceOverride = selectedVariant?.priceOverride && selectedVariant.priceOverride > 0 ? selectedVariant.priceOverride : null;
   const hasVariantPriceOverride = selectedVariantPriceOverride !== null;
   const hasTiers = pricingTiers.length > 0;
   const showTierPricing = hasTiers && !hasVariantPriceOverride;
-  const activeTier = showTierPricing ? pricingTiers[selectedTierIdx] : null;
+  const activeTier = showTierPricing ? (pricingTiers[selectedTierIdx] ?? pricingTiers[0]) : null;
   const selectedDisplayImage = selectedVariant?.image || selectedImage;
-  const displayPrice = hasVariantPriceOverride
-    ? selectedVariantPriceOverride
-    : (activeTier ? activeTier.finalPrice : (product?.pricing?.price ?? product?.price ?? 0));
+  const orderQuantity = hasVariantPriceOverride ? quantity : (activeTier?.qty ?? quantity);
+  const { unitPrice, lineTotal: totalPrice } = getUnitPricingForQuantity(product, orderQuantity, selectedVariantPriceOverride);
+  const roundedUnitPrice = Math.round(unitPrice * 100) / 100;
+  const approximateUnitPrice = Math.abs(roundedUnitPrice * orderQuantity - totalPrice) > 0.005;
+  const displayPrice = totalPrice;
   const rawOldPrice = activeTier
-    ? activeTier.originalPrice
-    : (product?.pricing?.compareAt ?? product?.compareAt ?? product?.oldPrice ?? null);
+    ? activeTier.originalPrice * orderQuantity
+    : (product?.pricing?.compareAt ?? product?.compareAt ?? product?.oldPrice ?? null) * orderQuantity;
   const displayOldPrice = rawOldPrice && rawOldPrice > displayPrice ? rawOldPrice : null;
-  const orderQuantity = hasVariantPriceOverride
-    ? quantity
-    : (activeTier?.qty ?? quantity);
-  const totalPrice = displayPrice * orderQuantity;
   const displayStock = selectedVariant?.stock ?? (product.stockTotal ?? product.inventory?.stockTotal ?? product.stock ?? 0);
   const reviews=product.reviews||[];
   const configuredFaq: { question: string; answer: string }[] = product.faq ?? [];
   const hasPolicyFaq = configuredFaq.some((item) => /ضمان|استرجاع|استبدال|warranty|return/i.test(item.question));
   const displayFaq: { question: string; answer: string }[] = hasPolicyFaq ? configuredFaq : [...configuredFaq,
-    { question: "الاسترجاع والاستبدال خلال ١٤ يوم", answer: "يمكنك طلب الاسترجاع أو الاستبدال خلال ١٤ يومًا من الاستلام، بشرط أن يكون المنتج بحالته الأصلية وغير مستخدم ومع التغليف." },
-    { question: "الضمان", answer: "يشمل المنتج ضمانًا ضد عيوب التصنيع حسب حالة المنتج. تواصل معنا مع رقم الطلب وصورة العيب لمراجعة الطلب." },
+    { question: "الاسترجاع والاستبدال والضمان", answer: "يمكنك طلب الاسترجاع أو الاستبدال خلال ١٤ يومًا من الاستلام بشرط أن يكون المنتج بحالته الأصلية وغير مستخدم ومع التغليف. يشمل الضمان عيوب التصنيع حسب حالة المنتج؛ تواصل معنا برقم الطلب وصورة العيب للمراجعة." },
   ];
+  const hasShippingFaq = displayFaq.some((item) => /توصيل|شحن|shipping|delivery/i.test(item.question));
   const displayBadges: string[] = product.badges ?? [];
   const displaySpecs: { key: string; value: string }[] = product.specs ?? [];
   const displayUsageInstructions = product.usageInstructions ?? "";
@@ -178,9 +184,8 @@ export default function ProductDetail() {
     : product.descriptionLong || product.descriptionShort || "اسأل فهد عن المواصفات المتاحة.";
 
   const shippingContent = displayFaq.filter(f=>/توصيل|شحن|shipping|delivery/i.test(f.question)).map(f=>f.answer).join("\n") || "تكلفة الشحن حسب المدينة وتظهر قبل إرسال الطلب. يتم تأكيد موعد التوصيل مع المتجر.";
-  const warrantyContent = displayFaq.filter(f=>/ضمان|استرجاع|استبدال|warranty|return/i.test(f.question)).map(f=>f.answer).join("\n");
 
-  const handleQuickChat = (message: string) => {
+  const handleQuickChat = () => {
     setChatProductContext({
       product: product,
       productId: Number(product.id),
@@ -233,17 +238,17 @@ export default function ProductDetail() {
           </button>
         </div>
 
-        <div className="bg-muted/30 rounded-2xl mx-3 overflow-hidden mb-3 animate-fade-in">
+        <div className="bg-muted/30 rounded-2xl mx-3 overflow-hidden mb-2 animate-fade-in">
           {selectedDisplayImage ? (
             <img
               key={selectedDisplayImage}
               src={selectedDisplayImage}
               alt={product.title}
-              className="w-full h-[clamp(180px,28svh,240px)] object-cover object-center animate-fade-in"
+              className="w-full h-[clamp(180px,25svh,220px)] object-cover object-center animate-fade-in"
               decoding="async" fetchPriority="high" width={800} height={800} data-testid="img-product-main"
             />
           ) : (
-            <div className="w-full h-[clamp(180px,28svh,240px)] flex items-center justify-center text-muted-foreground text-6xl">
+            <div className="w-full h-[clamp(180px,25svh,220px)] flex items-center justify-center text-muted-foreground text-6xl">
               📦
             </div>
           )}
@@ -269,7 +274,7 @@ export default function ProductDetail() {
           </div>
         )}
 
-        <div className="px-3 space-y-3 animate-slide-up-spring">
+        <div className="px-3 space-y-2.5 animate-slide-up-spring">
           <div>
             <h1 className="text-lg font-bold text-foreground leading-7" data-testid="text-product-title">
               {product.title}
@@ -278,10 +283,11 @@ export default function ProductDetail() {
               <ProductRating product={product} compact />
               <span className="shrink-0 text-[11px] text-muted-foreground">{displayStock > 0 ? `${displayStock} متوفر` : "غير متوفر"}</span>
             </div>
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <div className="flex items-baseline gap-2 mt-1.5 flex-wrap">
               <span className="text-xl font-bold text-foreground" data-testid="text-product-price">
                 {formatPrice(displayPrice)}
               </span>
+              <span className="text-xs text-muted-foreground">{orderQuantity > 1 ? `إجمالي ${orderQuantity} قطع · ${approximateUnitPrice ? "حوالي " : ""}${formatPrice(roundedUnitPrice)} للقطعة` : "للقطعة"}</span>
               {hasVariantPriceOverride && (
                 <Badge className="bg-[#CDEB63]/15 text-[#5f7f13] border-0 text-xs no-default-hover-elevate">
                   لهذا SKU سعر خاص
@@ -298,6 +304,10 @@ export default function ProductDetail() {
                 </Badge>
               )}
             </div>
+            <button type="button" onClick={handleQuickChat} className="mt-1.5 inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-[#176b52] underline underline-offset-4" data-testid="button-ask-fahd">
+              <MessageCircle className="h-3.5 w-3.5" />
+              عندك سؤال؟ اسأل فهد
+            </button>
           </div>
 
           {displayBadges.length > 0 ? (
@@ -323,7 +333,7 @@ export default function ProductDetail() {
             <div className="flex gap-1.5 flex-wrap">
               <Badge variant="outline" className="text-[11px] gap-1 px-2 no-default-hover-elevate">
                 <Truck className="w-3 h-3" />
-                الشحن حسب المدينة
+                {product.freeShipping ? "شحن مجاني" : "الشحن حسب المدينة"}
               </Badge>
               <Badge variant="outline" className="text-[11px] gap-1 px-2 no-default-hover-elevate">
                 <CreditCard className="w-3 h-3" />
@@ -331,7 +341,7 @@ export default function ProductDetail() {
               </Badge>
               <Badge variant="outline" className="text-[11px] gap-1 px-2 no-default-hover-elevate">
                 <ShieldCheck className="w-3 h-3" />
-                تفاصيل الضمان أدناه
+                الضمان أدناه
               </Badge>
             </div>
           )}
@@ -456,9 +466,9 @@ export default function ProductDetail() {
             </div>
           ) : showTierPricing ? (
             <div>
-              <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
                 <h3 className="text-sm font-semibold">اختر عرضك</h3>
-                <span className="text-[11px] text-muted-foreground">السعر للقطعة</span>
+                <span className="text-[11px] text-muted-foreground">الإجمالي قبل الشحن</span>
               </div>
               <div className="grid grid-cols-3 gap-1.5">
                 {pricingTiers.map((tier, i) => (
@@ -466,7 +476,7 @@ export default function ProductDetail() {
                     key={i}
                     onClick={() => setSelectedTierIdx(i)}
                     aria-pressed={i === selectedTierIdx}
-                    className={`px-2 py-2 rounded-xl border text-xs transition-all text-right min-w-0 min-h-[44px] active:scale-95 ${
+                    className={`px-2 py-2.5 rounded-xl border text-xs transition-all text-right min-w-0 min-h-[72px] active:scale-95 ${
                       i === selectedTierIdx
                         ? "border-[#CDEB63] bg-[#CDEB63]/10"
                         : "border-border bg-card"
@@ -474,10 +484,8 @@ export default function ProductDetail() {
                     data-testid={`chip-tier-${tier.qty}`}
                   >
                     <div className="font-semibold leading-5">{tier.label || `${tier.qty} قطعة`}</div>
-                    {tier.originalPrice > tier.finalPrice && (
-                      <div className="text-[11px] text-muted-foreground line-through">{formatPrice(tier.originalPrice)}</div>
-                    )}
-                    <div className="text-sm font-bold text-foreground">{formatPrice(tier.finalPrice)}</div>
+                    <div className="text-[11px] text-muted-foreground">{tier.qty > 1 ? formatOfferUnitPrice(tier) : "السعر النهائي"}</div>
+                    <div className="text-sm font-bold text-foreground">{formatPrice(getTierTotal(tier))}</div>
                   </button>
                 ))}
               </div>
@@ -522,22 +530,14 @@ export default function ProductDetail() {
                 {featuresContent}
               </AccordionContent>
             </AccordionItem>
-            <AccordionItem value="shipping">
+            {!hasShippingFaq && <AccordionItem value="shipping">
               <AccordionTrigger className="text-sm font-semibold" data-testid="accordion-shipping">
                 متى يوصل؟
               </AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
                 {shippingContent}
               </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="warranty">
-              <AccordionTrigger className="text-sm font-semibold" data-testid="accordion-warranty">
-                الضمان والاستبدال؟
-              </AccordionTrigger>
-              <AccordionContent className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
-                {warrantyContent}
-              </AccordionContent>
-            </AccordionItem>
+            </AccordionItem>}
             {displayUsageInstructions && (
               <AccordionItem value="usage-instructions">
                 <AccordionTrigger className="text-sm font-semibold" data-testid="accordion-usage-instructions">

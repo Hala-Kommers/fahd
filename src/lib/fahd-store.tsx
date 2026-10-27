@@ -223,7 +223,7 @@ export function FahdProvider({ children }: { children: ReactNode }) {
       const existing = prev.findIndex((item) => getItemKey(item) === getItemKey({ product, variantId, color, size }));
       if (existing >= 0) {
         const updated = [...prev];
-        updated[existing] = { ...updated[existing], quantity: updated[existing].quantity + qty };
+        updated[existing] = { ...updated[existing], quantity: product.bundleOnly ? qty : updated[existing].quantity + qty };
         return updated;
       }
       return [...prev, { product, quantity: qty, color, size, variantId: variantId ?? null, variantAttributes, variantLabel, variantPrice }];
@@ -261,9 +261,8 @@ export function FahdProvider({ children }: { children: ReactNode }) {
 
   const getCartTotal = useCallback(() => {
     return cartItems.reduce((sum, item) => {
-      const { unitPrice } = getUnitPricingForQuantity(item.product, item.quantity, item.variantPrice);
-      const price = unitPrice;
-      return sum + price * item.quantity;
+      const { lineTotal } = getUnitPricingForQuantity(item.product, item.quantity, item.variantPrice);
+      return sum + lineTotal;
     }, 0);
   }, [cartItems]);
 
@@ -272,9 +271,8 @@ export function FahdProvider({ children }: { children: ReactNode }) {
     const couponValue = Number(appliedCoupon.value);
     if (Number.isNaN(couponValue)) return 0;
     const total = cartItems.reduce((sum, item) => {
-      const { unitPrice } = getUnitPricingForQuantity(item.product, item.quantity, item.variantPrice);
-      const price = unitPrice;
-      return sum + price * item.quantity;
+      const { lineTotal } = getUnitPricingForQuantity(item.product, item.quantity, item.variantPrice);
+      return sum + lineTotal;
     }, 0);
     if (appliedCoupon.type === "percentage") {
       return Math.round(total * (couponValue / 100));

@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:pricing": "node --test tests/pricing.test.mjs",
+    "test:checkout": "node --test tests/checkout-validation.test.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

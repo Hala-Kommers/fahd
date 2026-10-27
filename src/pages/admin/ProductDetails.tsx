@@ -43,6 +43,8 @@ const defaultValues: any = {
     sku: "",
     status: "active",
     isFeatured: false,
+    freeShipping: false,
+    bundleOnly: false,
     descriptionShort: "",
     descriptionLong: "",
     category: "",
@@ -686,8 +688,20 @@ export default function ProductDetails() {
                                     <p className="text-sm text-muted-foreground">أضف أسعاراً مختلفة لكل كمية (١ قطعة، ٢ قطعة، ٣ قطع...)</p>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
+                                    <FormField control={form.control} name="freeShipping" render={({ field }) => (
+                                        <FormItem className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                                            <FormLabel>شحن مجاني لهذا المنتج</FormLabel>
+                                            <FormControl><Switch checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                                        </FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="bundleOnly" render={({ field }) => (
+                                        <FormItem className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                                            <div><FormLabel>الشراء بالباقات المحددة فقط</FormLabel><FormDescription>أدخل إجمالي كل باقة. لن يُضاف عرض قطعة واحدة تلقائيًا.</FormDescription></div>
+                                            <FormControl><Switch checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                                        </FormItem>
+                                    )} />
                                     {tierFields.map((field, index) => (
-                                        <div key={field.id} className="grid grid-cols-[80px_1fr_1fr_1fr_40px] gap-2 items-end border rounded p-3">
+                                        <div key={field.id} className="grid grid-cols-2 lg:grid-cols-[65px_1fr_1fr_1fr_1fr_40px] gap-2 items-end border rounded p-3">
                                             <FormField
                                                 control={form.control}
                                                 name={`pricingTiers.${index}.qty`}
@@ -717,7 +731,7 @@ export default function ProductDetails() {
                                                 name={`pricingTiers.${index}.originalPrice`}
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel className="text-xs">سعر البيع (مشطوب)</FormLabel>
+                                                        <FormLabel className="text-xs">السعر الأصلي للقطعة</FormLabel>
                                                         <FormControl>
                                                             <Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
                                                         </FormControl>
@@ -729,13 +743,20 @@ export default function ProductDetails() {
                                                 name={`pricingTiers.${index}.finalPrice`}
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel className="text-xs">السعر النهائي</FormLabel>
+                                                        <FormLabel className="text-xs">السعر النهائي للقطعة</FormLabel>
                                                         <FormControl>
                                                             <Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
                                                         </FormControl>
                                                     </FormItem>
                                                 )}
                                             />
+                                            <FormField control={form.control} name={`pricingTiers.${index}.bundlePrice`} render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs">إجمالي الباقة (اختياري)</FormLabel>
+                                                    <FormControl><Input type="number" min={0.01} step="0.01" placeholder="مثال: 209" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
+                                                    <FormDescription className="text-[10px]">يُعتمد الإجمالي عند تحديده</FormDescription>
+                                                </FormItem>
+                                            )} />
                                             <Button type="button" variant="ghost" size="icon" onClick={() => removeTier(index)} className="self-end">
                                                 <Trash2 className="w-4 h-4 text-destructive" />
                                             </Button>

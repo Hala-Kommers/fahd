@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getUnitPricingForQuantity } from '@/lib/pricing';
+import { getPurchaseOffers } from '@/lib/pricing';
 import { Button } from '@/components/ui/button';
 import { engageChat, trackCommerce, type Receipt } from '@/lib/commerce';
 import OfferCards from './OfferCards';
 import CheckoutForm from './CheckoutForm';
-import { Check, ChevronDown, Loader2 } from 'lucide-react';
+import { ChevronDown, Loader2 } from 'lucide-react';
 
 export type CommercePanel = 'order' | 'offers' | 'policy';
 
@@ -71,17 +71,17 @@ export function ChatCommerceCard({ cardId, panel, productId, quantity: initialQu
     if (panel === 'offers') onChoose(nextQuantity, Number(activeId), variant ? Number(variantId) : undefined);
   }
 
-  const quantities = product
-    ? [1, ...getUnitPricingForQuantity(product, 1, variant?.priceOverride).tiers.map(tier => tier.qty)].filter((q, i, all) => all.indexOf(q) === i)
-    : [];
+  const quantities = product ? getPurchaseOffers(product, variant?.priceOverride).map(tier => tier.qty) : [];
+  const orderQuantity = product?.bundleOnly && !quantities.includes(quantity) ? (quantities[0] ?? 0) : quantity;
+  const productImage = product?.primaryImage || product?.images?.find((image: any) => image.isPrimary)?.url || product?.images?.[0]?.url;
 
-  return <section dir="rtl" className="rounded-2xl border bg-card p-3 space-y-3 shadow-sm" aria-label={panelTitle} data-commerce-card={panel}>
+  return <section dir="rtl" className="rounded-2xl border bg-card p-3 space-y-2" aria-label={panelTitle} data-commerce-card={panel}>
     <div className="flex items-center justify-between gap-2">
-      <h3 className="font-bold text-base">{panelTitle}</h3>
-      <Button type="button" variant="ghost" disabled={busy} className="chat-press h-8 px-2 text-xs" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'طي التفاصيل' : 'عرض التفاصيل'}<ChevronDown aria-hidden="true" className="chat-disclosure-icon h-3 w-3" /></Button>
+      {productImage && <img src={productImage} alt="" loading="lazy" decoding="async" className="h-11 w-11 shrink-0 rounded-lg object-cover"/>}
+      <div className="min-w-0 flex-1"><h3 className="font-bold text-sm">{panelTitle}</h3>{product && <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{product.title}</p>}</div>
+      <Button type="button" variant="ghost" disabled={busy} className="chat-press h-11 min-h-11 w-11 shrink-0 p-0 text-xs" aria-label={expanded ? 'طي التفاصيل' : 'عرض التفاصيل'} aria-expanded={expanded} onClick={() => setExpanded(value => !value)}><ChevronDown aria-hidden="true" className="chat-disclosure-icon h-4 w-4" /></Button>
     </div>
-    {product && <p className="text-xs text-muted-foreground">{product.title}</p>}
-    <div hidden={!expanded} className="chat-card-content space-y-3">
+    <div hidden={!expanded} className="chat-card-content space-y-2">
       {!productId && <label className="grid gap-2 text-sm">المنتج<select disabled={busy || completed} className="border rounded-xl p-2 bg-background" value={activeId} onChange={e => { setChosenProduct(e.target.value); setSelection({ quantity: 1, variantId: '' }); }}><option value="">اختر المنتج</option>{products.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select></label>}
       {isFetching && !product && <Loader2 className="animate-spin" />}
       {error && <p role="alert">تعذر تحميل المنتج، حاول مرة أخرى.</p>}
@@ -89,19 +89,12 @@ export function ChatCommerceCard({ cardId, panel, productId, quantity: initialQu
         {product.hasVariants && panel !== 'policy' && !completed && <label className="grid gap-1 text-sm">خيارات المنتج<select disabled={busy} value={variantId} className="border rounded-xl p-3 bg-background" onChange={e => setSelection({ variantId: e.target.value, quantity: 1 })}><option value="">اختر المقاس أو اللون</option>{product.variants?.filter((v: any) => v.isActive !== false).map((v: any) => <option key={v.id} value={v.id}>{Object.values(v.attributes || {}).join(' / ')}</option>)}</select></label>}
         {panel === 'offers' && <>
           <OfferCards product={product} stock={stock} variantPrice={variant?.priceOverride} disabled={product.hasVariants && !variant} onChoose={choose} />
-          <p className="text-xs text-muted-foreground">الشحن وموعد التوصيل حسب المدينة، ويظهران قبل إرسال الطلب.</p>
+          <p className="text-xs text-muted-foreground">{product.freeShipping ? 'الشحن مجاني. اختر مدينتك لمعرفة موعد التوصيل.' : 'الشحن وموعد التوصيل حسب المدينة، ويظهران قبل إرسال الطلب.'}</p>
         </>}
         {panel === 'order' && <>
-          {!completed && <div className="grid grid-cols-3 gap-2" aria-label="اختيار عرض الطلب">{quantities.map(q => {
-            const price = getUnitPricingForQuantity(product, q, variant?.priceOverride).unitPrice;
-            return <button type="button" key={q} disabled={busy || q > stock} aria-pressed={q === quantity} onClick={() => choose(q)} className={`chat-press rounded-xl border p-2 text-center disabled:opacity-50 ${q === quantity ? 'border-emerald-600 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100' : 'bg-background'}`}>
-              <span className="block text-xs">{q === 1 ? 'قطعة واحدة' : `${q} قطع`}</span>
-              <strong className="block text-sm">{(price * q).toLocaleString('ar-SA')} ر.س</strong>
-              <span className="block h-4 text-[10px]">{q === quantity && <span className="chat-selection-pop inline-flex items-center gap-1">العرض المختار<Check className="h-3 w-3" aria-hidden="true" /></span>}</span>
-            </button>;
-          })}</div>}
-          {completed || (quantity > 0 && quantity <= stock && (!product.hasVariants || variant))
-            ? <CheckoutForm initialReceipt={receipt} onPendingChange={setBusy} onSuccess={result => { sessionStorage.setItem(receiptKey, JSON.stringify(result)); setReceipt(result); }} key={`${activeId}:${variantId}:${quantity}`} items={[{ productId: Number(activeId), variantId: variant ? Number(variantId) : null, qty: quantity }]} />
+          {!completed && <OfferCards mode="select" selectedQuantity={orderQuantity} product={product} variantPrice={variant?.priceOverride} stock={stock} disabled={busy || (product.hasVariants && !variant)} onChoose={choose}/>}
+          {completed || (orderQuantity > 0 && orderQuantity <= stock && (!product.hasVariants || variant))
+            ? <CheckoutForm initialReceipt={receipt} onPendingChange={setBusy} onSuccess={result => { sessionStorage.setItem(receiptKey, JSON.stringify(result)); setReceipt(result); }} key={`${activeId}:${variantId}:${orderQuantity}`} items={[{ productId: Number(activeId), variantId: variant ? Number(variantId) : null, qty: orderQuantity }]} />
             : <p role="alert" className="text-sm">اختر الخيارات وكمية متاحة لإكمال طلبك.</p>}
         </>}
         {panel === 'policy' && <div className="space-y-3 text-sm">{(() => {

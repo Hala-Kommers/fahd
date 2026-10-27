@@ -407,6 +407,25 @@
 .checkout-spark { position: absolute; inset: 0; pointer-events: none; }
 .checkout-spark i { display: block; position: absolute; inset-inline-start: 34px; top: 0; height: 6px; width: 4px; border-radius: 2px; background: #84cc16; opacity: 0; }
 
+/* Checkout stays readable at phone width, including iOS form focus. */
+.checkout-label { font-size: 12px; line-height: 18px; font-weight: 500; }
+.checkout-form .checkout-input {
+  height: 44px;
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 24px;
+  caret-color: #047857;
+  scroll-margin-block: 96px;
+}
+.checkout-form .checkout-input::placeholder { color: hsl(var(--muted-foreground)); font-size: 13px; }
+.checkout-form .checkout-input:focus-visible { outline: 2px solid #047857; outline-offset: 2px; box-shadow: none; }
+.checkout-form .checkout-input[aria-invalid="true"] { border-color: hsl(var(--destructive)); }
+.checkout-form .checkout-input[aria-invalid="true"]:focus-visible { outline-color: hsl(var(--destructive)); }
+.checkout-form ::selection { background: #d1fae5; color: #064e3b; }
+.checkout-submit:focus-visible, .checkout-help:focus-visible { outline: 2px solid #047857; outline-offset: 3px; }
+.dark .checkout-form .checkout-input { caret-color: #6ee7b7; }
+.dark .checkout-form .checkout-input:focus-visible { outline-color: #6ee7b7; }
+
 @media (prefers-reduced-motion: no-preference) {
   .chat-press:active:not(:disabled) { transform: scale(.96); }
   .chat-message-enter { animation: chat-message-arrive 280ms cubic-bezier(.2,.8,.2,1) both; }

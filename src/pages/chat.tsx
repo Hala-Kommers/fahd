@@ -4,7 +4,8 @@ import { useReducedMotion } from "framer-motion";
 import ProductRating from "@/components/ProductRating";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ensureChatSession, trackCommerce, attribution } from "@/lib/commerce";
+import { ensureChatSession, trackCommerce, attribution, money } from "@/lib/commerce";
+import { getPurchaseOffers, getTierTotal } from "@/lib/pricing";
 import { apiRequest } from "@/lib/queryClient";
 import { mergeChatTimeline } from "@/lib/chat-timeline";
 import { Button } from "@/components/ui/button";
@@ -440,7 +441,8 @@ function ProductActionCard({
     || product?.image
     || "";
   const title = product?.title || "عرض المنتج";
-  const price = product?.pricing?.price ?? product?.price ?? null;
+  const bundles = product?.bundleOnly ? getPurchaseOffers(product).filter(tier => tier.qty <= product.stockTotal) : [];
+  const price = product?.bundleOnly ? (bundles.length ? Math.min(...bundles.map(getTierTotal)) : null) : product?.pricing?.price ?? product?.price ?? null;
 
   return (
     <button
@@ -466,7 +468,7 @@ function ProductActionCard({
         <div className="min-w-0 flex-1">
           <p className="text-[11px] text-muted-foreground mb-1">منتج مقترح</p>
           <h3 className="font-bold text-sm text-foreground line-clamp-2">{title}</h3>
-          {price !== null && <p className="text-xs text-[#6f941e] font-semibold mt-1">{price} ر.س</p>}
+          {price !== null && <p className="text-xs text-emerald-700 dark:text-emerald-300 font-semibold mt-1">{product?.bundleOnly && 'باقات من '}{money(price)}</p>}
         </div>
       </div>
     </button>
@@ -475,11 +477,14 @@ function ProductActionCard({
 
 function ProductContextCard({
   context,
+  currentProduct,
 }: {
   context: NonNullable<ReturnType<typeof useFahd>["chatProductContext"]>;
+  currentProduct?: any;
 }) {
-  const product = context.product as any;
-  const price = product?.pricing?.price ?? product?.price ?? null;
+  const product = currentProduct ?? context.product as any;
+  const bundles = product?.bundleOnly ? getPurchaseOffers(product).filter(tier => tier.qty <= product.stockTotal) : [];
+  const price = product?.bundleOnly ? (bundles.length ? Math.min(...bundles.map(getTierTotal)) : null) : product?.pricing?.price ?? product?.price ?? null;
 
   return (
     <div className="max-w-2xl mx-auto px-3 pb-1.5">
@@ -504,11 +509,11 @@ function ProductContextCard({
                 {context.product.title}
               </h2>
               {price !== null && (
-                <p className="text-xs text-muted-foreground">{price} ر.س</p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">{product?.bundleOnly && 'باقات من '}{money(price)}</p>
               )}
             </div>
           </div>
-          <ProductRating product={product} />
+          {product.reviews?.length > 0 && <ProductRating product={product} compact />}
         </div>
       </div>
     </div>
@@ -897,6 +902,9 @@ export default function ChatPage() {
   const hasProductContext = !!chatProductContext;
   const isConnected = connectionStatus === "connected" && isReady;
   const canSend = isConnected && isHistoryLoaded;
+  const lastMessage = messages[messages.length - 1];
+  const checkoutIsLatest = lastMessage?.commerce?.panel === 'order'
+    || lastMessage?.actions?.some(action => action.type === 'address_form' || action.type === 'checkout');
 
   return (
     <div className="chat-ui h-[100dvh] min-h-0 overflow-hidden bg-background flex flex-col">
@@ -925,6 +933,7 @@ export default function ChatPage() {
         {chatProductContext && (
           <ProductContextCard
             context={chatProductContext}
+            currentProduct={offerProduct}
           />
         )}
       </header>
@@ -1041,7 +1050,7 @@ export default function ChatPage() {
 
       <div className="shrink-0 bg-background/90 backdrop-blur-xl border-t border-border/50 px-3 py-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
         <div className="max-w-2xl mx-auto space-y-1">
-          <ChatProductActions onOpen={openCommerce} />
+          {!checkoutIsLatest && <ChatProductActions onOpen={openCommerce} />}
           <div className="flex gap-2">
               <Input
                 value={inputText}

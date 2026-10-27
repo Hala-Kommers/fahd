@@ -23,7 +23,7 @@ export default function ProductRating({ product, compact = false }: { product: {
         <b dir="ltr">{rating.toFixed(1)}/5</b>
         <span className="text-muted-foreground">· {count.toLocaleString("ar-SA")} تقييم</span>
       </div>
-      <span className="block text-[11px] font-medium text-muted-foreground">{demo ? "تقييمات تجريبية" : "مراجعات مشتريات موثقة"}</span>
+      {!compact && <span className="block text-[11px] font-medium text-muted-foreground">{demo ? "تقييمات تجريبية" : "مراجعات مشتريات موثقة"}</span>}
     </div>
   );
 }

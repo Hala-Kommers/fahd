@@ -33,6 +33,7 @@ export const pricingTierSchema = z.object({
   label: z.string().optional(),    // "قطعة واحدة"، "قطعتان"...
   originalPrice: z.number(),       // سعر البيع (مشطوب)
   finalPrice: z.number(),          // السعر النهائي
+  bundlePrice: z.number().positive().optional(), // إجمالي الباقة الدقيق، إن وجد
 });
 export type PricingTier = z.infer<typeof pricingTierSchema>;
 
@@ -59,6 +60,8 @@ export const productSchema = z.object({
 
   usageInstructions: z.string().optional(),
   pricingTiers: z.array(pricingTierSchema).default([]),
+  freeShipping: z.boolean().optional(),
+  bundleOnly: z.boolean().optional(),
 
   salesCount: z.number().default(0),
   rating: z.number().default(0),
