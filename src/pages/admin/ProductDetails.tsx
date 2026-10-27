@@ -169,8 +169,9 @@ export default function ProductDetails() {
     const [generatedVariants, setGeneratedVariants] = useState<VariantRow[]>([]);
     const [variantValueDrafts, setVariantValueDrafts] = useState<Record<string, string>>({});
     const [deletedVariantKeys, setDeletedVariantKeys] = useState<string[]>([]);
+    const [activeTab, setActiveTab] = useState(() => window.location.search.includes("tab=pricing") ? "pricing" : "basic");
 
-    const { data: product, isLoading: isLoadingProduct } = useQuery<any>({
+    const { data: product, isLoading: isLoadingProduct, error: productLoadError } = useQuery<any>({
         queryKey: [`/api/admin/products/${productId}`],
         enabled: !!isEditing && !!productId,
     });
@@ -221,6 +222,7 @@ export default function ProductDetails() {
         onSuccess: () => {
             toast({ title: "تم إنشاء المنتج بنجاح" });
             queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+            queryClient.invalidateQueries({ predicate: ({ queryKey }) => typeof queryKey[0] === "string" && queryKey[0].startsWith("/api/products") });
             setLocation("/admin/products");
         },
         onError: (error: any) => {
@@ -235,7 +237,7 @@ export default function ProductDetails() {
             toast({ title: "تم تحديث المنتج بنجاح" });
             queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
             queryClient.invalidateQueries({ queryKey: [`/api/admin/products/${productId}`] });
-            queryClient.invalidateQueries({ queryKey: [`/api/products/${productId}`] });
+            queryClient.invalidateQueries({ predicate: ({ queryKey }) => typeof queryKey[0] === "string" && queryKey[0].startsWith("/api/products") });
             setLocation("/admin/products");
         },
         onError: (error: any) => {
@@ -245,7 +247,14 @@ export default function ProductDetails() {
 
     const onSubmit = (data: any) => {
         form.clearErrors();
+        const reject = (field: string, message: string, tab: string) => {
+            form.setError(field, { type: "manual", message });
+            setActiveTab(tab);
+            toast({ title: message, variant: "destructive" });
+            setTimeout(() => form.setFocus(field), 0);
+        };
         const images = Array.isArray(data.images) ? data.images : [];
+        const pricingTiers = Array.isArray(data.pricingTiers) ? data.pricingTiers : [];
         const normalizedGroups = variantGroups
             .map((group) => ({
                 ...group,
@@ -258,52 +267,80 @@ export default function ProductDetails() {
             .filter((variant) => !deletedVariantKeys.includes(variant.key));
 
         if (!data.title?.trim()) {
-            form.setError("title", { type: "manual", message: "اسم المنتج مطلوب" });
-            toast({ title: "الرجاء إدخال اسم المنتج", variant: "destructive" });
+            reject("title", "اسم المنتج مطلوب", "basic");
             return;
         }
 
         if (!data.sku?.trim()) {
-            form.setError("sku", { type: "manual", message: "SKU مطلوب" });
-            toast({ title: "الرجاء إدخال SKU", variant: "destructive" });
+            reject("sku", "رمز المنتج مطلوب", "basic");
             return;
         }
 
         if (!data.category) {
-            form.setError("category", { type: "manual", message: "التصنيف مطلوب" });
-            toast({ title: "الرجاء اختيار التصنيف", variant: "destructive" });
+            reject("category", "اختر تصنيف المنتج", "basic");
             return;
         }
 
-        if (images.length === 0) {
-            form.setError("images", { type: "manual", message: "أضف صورة واحدة على الأقل" });
-            toast({ title: "يجب إضافة صورة واحدة على الأقل", variant: "destructive" });
+        if (!Number.isFinite(Number(data.pricing?.price)) || Number(data.pricing?.price) <= 0) {
+            reject("pricing.price", "أدخل سعرًا مرجعيًا أكبر من صفر", "pricing");
+            return;
+        }
+
+        if (data.bundleOnly && data.hasVariants) {
+            reject("bundleOnly", "الباقات المحددة لا تدعم خيارات المنتج", "pricing");
+            return;
+        }
+
+        if (data.bundleOnly && pricingTiers.length === 0) {
+            reject("pricingTiers", "أضف باقة واحدة على الأقل", "pricing");
+            return;
+        }
+
+        const seenQuantities = new Set<number>();
+        for (let index = 0; index < pricingTiers.length; index++) {
+            const tier = pricingTiers[index];
+            const qty = Number(tier.qty);
+            const usesTotal = data.bundleOnly || tier.bundlePrice != null;
+            const activePrice = Number(usesTotal ? tier.bundlePrice : tier.finalPrice);
+            if (!Number.isInteger(qty) || qty < 1 || qty > 1000 || seenQuantities.has(qty)) {
+                reject(`pricingTiers.${index}.qty`, "كمية العرض يجب أن تكون فريدة وبين ١ و١٠٠٠", "pricing");
+                return;
+            }
+            seenQuantities.add(qty);
+            if (!Number.isFinite(activePrice) || activePrice <= 0) {
+                reject(`pricingTiers.${index}.${usesTotal ? "bundlePrice" : "finalPrice"}`, "أدخل سعرًا أكبر من صفر لكل عرض", "pricing");
+                return;
+            }
+            if (!Number.isFinite(Number(tier.originalPrice)) || Number(tier.originalPrice) < 0) {
+                reject(`pricingTiers.${index}.originalPrice`, "السعر الأصلي للقطعة لا يمكن أن يكون سالبًا", "pricing");
+                return;
+            }
+        }
+
+        if (!isEditing && images.length === 0) {
+            reject("images", "أضف صورة واحدة على الأقل", "images");
             return;
         }
 
         const primaryImagesCount = images.filter((img: any) => !!img?.isPrimary).length;
-        if (primaryImagesCount !== 1) {
-            form.setError("images", { type: "manual", message: "يجب اختيار صورة رئيسية واحدة فقط" });
-            toast({ title: "يجب اختيار صورة رئيسية واحدة فقط", variant: "destructive" });
+        if (images.length > 0 && primaryImagesCount !== 1) {
+            reject("images", "اختر صورة رئيسية واحدة فقط", "images");
             return;
         }
 
         if (data.hasVariants && normalizedGroups.length === 0) {
-            form.setError("variantOptions", { type: "manual", message: "أضف خيار متغير واحد على الأقل" });
-            toast({ title: "أضف خيار متغير واحد على الأقل", description: "مثل size أو color", variant: "destructive" });
+            reject("variantOptions", "أضف خيار متغير واحد على الأقل", "variants");
             return;
         }
 
         if (data.hasVariants) {
             if (normalizedGroups.some((group) => group.values.length === 0)) {
-                form.setError("variantOptions", { type: "manual", message: "أضف قيمة واحدة على الأقل لكل خيار" });
-                toast({ title: "أضف قيمة واحدة على الأقل لكل خيار", variant: "destructive" });
+                reject("variantOptions", "أضف قيمة واحدة على الأقل لكل خيار", "variants");
                 return;
             }
 
             if (nextGeneratedVariants.length === 0) {
-                form.setError("variants", { type: "manual", message: "أضف متغير واحد على الأقل" });
-                toast({ title: "يجب إضافة متغير واحد على الأقل", variant: "destructive" });
+                reject("variants", "أضف متغيرًا واحدًا على الأقل", "variants");
                 return;
             }
         }
@@ -334,6 +371,13 @@ export default function ProductDetails() {
             })),
             variantOptions: variantOptionNames,
             variants,
+            pricingTiers: pricingTiers.map((tier: any) => ({
+                qty: Number(tier.qty),
+                label: String(tier.label ?? "").trim(),
+                originalPrice: Number(tier.originalPrice) || 0,
+                finalPrice: tier.bundlePrice != null ? Number(tier.bundlePrice) / Number(tier.qty) : Number(tier.finalPrice),
+                bundlePrice: tier.bundlePrice == null ? null : Number(tier.bundlePrice),
+            })),
         };
 
         if (data.hasVariants) {
@@ -349,6 +393,7 @@ export default function ProductDetails() {
 
     const isSaving = createMutation.isPending || updateMutation.isPending;
     const hasVariants = form.watch("hasVariants");
+    const bundleOnly = form.watch("bundleOnly");
     const { fields: tierFields, append: appendTier, remove: removeTier } = useFieldArray({
         control: form.control,
         name: "pricingTiers",
@@ -432,11 +477,17 @@ export default function ProductDetails() {
         return <div className="p-8 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></div>;
     }
 
+    if (isEditing && (productLoadError || !product)) {
+        return <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5" role="alert">
+            <h1 className="text-lg font-bold">تعذر تحميل المنتج للتعديل</h1>
+            <p className="mt-2 text-sm">{productLoadError instanceof Error ? productLoadError.message : "لم تصل بيانات المنتج من الخادم."}</p>
+            <Button type="button" variant="outline" className="mt-4" onClick={() => setLocation("/admin/products")}>العودة للمنتجات</Button>
+        </div>;
+    }
+
     return (
         <div className="space-y-6 max-w-5xl mx-auto pb-10" dir="rtl">
-            {isEditing && <ProductContentEditor productId={productId}/>}
- {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="sticky top-[60px] z-30 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur-sm">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/products")}>
                         <ArrowRight className="w-5 h-5" />
@@ -446,11 +497,12 @@ export default function ProductDetails() {
                             {isEditing ? "تعديل المنتج" : "منتج جديد"}
                         </h1>
                         <p className="text-sm text-muted-foreground">
-                            {isEditing ? `ID: ${productId}` : "إضافة منتج جديد للمتجر"}
+                            {isEditing ? `${form.watch("title") || `منتج رقم ${productId}`}` : "إضافة منتج جديد للمتجر"}
                         </p>
                     </div>
                 </div>
                 <div className="flex gap-2">
+                    {isEditing && activeTab !== "pricing" && <Button type="button" variant="outline" onClick={() => setActiveTab("pricing")}>تعديل الأسعار</Button>}
                     <Button variant="outline" onClick={() => setLocation("/admin/products")}>
                         إلغاء
                     </Button>
@@ -464,8 +516,8 @@ export default function ProductDetails() {
 
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <Tabs defaultValue="basic" className="w-full">
-                        <TabsList className="w-full justify-start overflow-x-auto">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                        <TabsList className="w-full justify-start overflow-x-auto h-auto flex-wrap">
                             <TabsTrigger value="basic">البيانات الأساسية</TabsTrigger>
                             <TabsTrigger value="pricing">التسعير</TabsTrigger>
                             <TabsTrigger value="images">الصور</TabsTrigger>
@@ -628,11 +680,22 @@ export default function ProductDetails() {
                                         name="pricing.price"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>سعر البيع</FormLabel>
+                                                <FormLabel>{bundleOnly ? "السعر المرجعي للقطعة" : "سعر بيع القطعة"}</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                    <Input type="number" min="0.01" step="0.01" {...field} value={field.value ?? ""} onChange={e => {
+                                                        const previousPrice = Number(field.value);
+                                                        const nextPrice = e.target.value === "" ? "" : Number(e.target.value);
+                                                        field.onChange(nextPrice);
+                                                        if (!bundleOnly) {
+                                                            (form.getValues("pricingTiers") || []).forEach((tier: any, index: number) => {
+                                                                if (Number(tier.qty) === 1 && tier.bundlePrice == null && Number(tier.finalPrice) === previousPrice) {
+                                                                    form.setValue(`pricingTiers.${index}.finalPrice`, nextPrice, { shouldDirty: true });
+                                                                }
+                                                            });
+                                                        }
+                                                    }} />
                                                 </FormControl>
-                                                <FormDescription>السعر النهائي للعميل</FormDescription>
+                                                <FormDescription>{bundleOnly ? "للمقارنة فقط؛ العميل يدفع إجمالي الباقة المحددة أدناه." : "سعر القطعة عند طلب قطعة واحدة."}</FormDescription>
                                                 <FormMessage />
                                             </FormItem>
                                         )}
@@ -644,7 +707,7 @@ export default function ProductDetails() {
                                             <FormItem>
                                                 <FormLabel>السعر قبل الخصم (اختياري)</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                    <Input type="number" min="0" step="0.01" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
                                                 </FormControl>
                                                 <FormDescription>يظهر مشطوباً عليه</FormDescription>
                                                 <FormMessage />
@@ -658,7 +721,7 @@ export default function ProductDetails() {
                                             <FormItem>
                                                 <FormLabel>سعر التكلفة (داخلي)</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                    <Input type="number" min="0" step="0.01" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
                                                 </FormControl>
                                                 <FormDescription>لحساب الأرباح فقط</FormDescription>
                                                 <FormMessage />
@@ -684,8 +747,8 @@ export default function ProductDetails() {
                             {/* Pricing Tiers */}
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>تسعير الكميات (اختياري)</CardTitle>
-                                    <p className="text-sm text-muted-foreground">أضف أسعاراً مختلفة لكل كمية (١ قطعة، ٢ قطعة، ٣ قطع...)</p>
+                                    <CardTitle>{bundleOnly ? "أسعار الباقات" : "تسعير الكميات (اختياري)"}</CardTitle>
+                                    <p className="text-sm text-muted-foreground">{bundleOnly ? "حدد إجمالي السعر لكل باقة يقدر العميل يطلبها." : "أضف أسعارًا مختلفة لكل كمية عند الحاجة."}</p>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <FormField control={form.control} name="freeShipping" render={({ field }) => (
@@ -700,8 +763,13 @@ export default function ProductDetails() {
                                             <FormControl><Switch checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
                                         </FormItem>
                                     )} />
-                                    {tierFields.map((field, index) => (
-                                        <div key={field.id} className="grid grid-cols-2 lg:grid-cols-[65px_1fr_1fr_1fr_1fr_40px] gap-2 items-end border rounded p-3">
+                                    {tierFields.map((field, index) => {
+                                        const tier = form.watch(`pricingTiers.${index}`);
+                                        const hasFixedTotal = bundleOnly || tier?.bundlePrice != null;
+                                        const quantity = Number(tier?.qty) || 1;
+                                        const total = hasFixedTotal ? Number(tier?.bundlePrice) : Number(tier?.finalPrice) * quantity;
+                                        return <div key={field.id} className="rounded-xl border p-3 space-y-2">
+                                        <div className="grid grid-cols-2 md:grid-cols-[80px_minmax(150px,1fr)_135px_155px_44px] gap-3 items-end">
                                             <FormField
                                                 control={form.control}
                                                 name={`pricingTiers.${index}.qty`}
@@ -709,8 +777,9 @@ export default function ProductDetails() {
                                                     <FormItem>
                                                         <FormLabel className="text-xs">الكمية</FormLabel>
                                                         <FormControl>
-                                                            <Input type="number" min={1} {...field} onChange={e => field.onChange(parseInt(e.target.value) || 1)} />
+                                                            <Input type="number" min={1} max={1000} step={1} {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))} />
                                                         </FormControl>
+                                                        <FormMessage />
                                                     </FormItem>
                                                 )}
                                             />
@@ -733,43 +802,55 @@ export default function ProductDetails() {
                                                     <FormItem>
                                                         <FormLabel className="text-xs">السعر الأصلي للقطعة</FormLabel>
                                                         <FormControl>
-                                                            <Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                            <Input type="number" min={0} step="0.01" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))} />
                                                         </FormControl>
+                                                        <FormMessage />
                                                     </FormItem>
                                                 )}
                                             />
-                                            <FormField
-                                                control={form.control}
-                                                name={`pricingTiers.${index}.finalPrice`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel className="text-xs">السعر النهائي للقطعة</FormLabel>
-                                                        <FormControl>
-                                                            <Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField control={form.control} name={`pricingTiers.${index}.bundlePrice`} render={({ field }) => (
+                                            {hasFixedTotal ? <FormField control={form.control} name={`pricingTiers.${index}.bundlePrice`} render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel className="text-xs">إجمالي الباقة (اختياري)</FormLabel>
+                                                    <FormLabel className="text-xs">إجمالي العرض</FormLabel>
                                                     <FormControl><Input type="number" min={0.01} step="0.01" placeholder="مثال: 209" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))} /></FormControl>
-                                                    <FormDescription className="text-[10px]">يُعتمد الإجمالي عند تحديده</FormDescription>
+                                                    <FormMessage />
                                                 </FormItem>
-                                            )} />
-                                            <Button type="button" variant="ghost" size="icon" onClick={() => removeTier(index)} className="self-end">
+                                            )} /> : <FormField control={form.control} name={`pricingTiers.${index}.finalPrice`} render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs">سعر القطعة في العرض</FormLabel>
+                                                    <FormControl><Input type="number" min={0.01} step="0.01" {...field} value={field.value ?? ""} onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))} /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />}
+                                            <Button type="button" variant="ghost" size="icon" aria-label={`حذف عرض الكمية ${quantity}`} onClick={() => removeTier(index)} className="self-end">
                                                 <Trash2 className="w-4 h-4 text-destructive" />
                                             </Button>
                                         </div>
-                                    ))}
+                                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                                            <span>{Number.isFinite(total) && total > 0 ? `العميل سيدفع ${total.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س مقابل ${quantity === 1 ? "قطعة واحدة" : quantity === 2 ? "قطعتين" : `${quantity} قطع`}` : "حدد سعر العرض"}</span>
+                                            {!bundleOnly && <button type="button" className="min-h-9 font-medium text-primary underline underline-offset-4" onClick={() => {
+                                                if (hasFixedTotal) {
+                                                    form.setValue(`pricingTiers.${index}.finalPrice`, Math.round(Number(tier?.bundlePrice || 0) / quantity * 100) / 100, { shouldDirty: true });
+                                                    form.setValue(`pricingTiers.${index}.bundlePrice`, null, { shouldDirty: true });
+                                                } else {
+                                                    form.setValue(`pricingTiers.${index}.bundlePrice`, Math.round(Number(tier?.finalPrice || 0) * quantity * 100) / 100, { shouldDirty: true });
+                                                }
+                                            }}>{hasFixedTotal ? "التسعير للقطعة" : "التسعير بإجمالي ثابت"}</button>}
+                                        </div>
+                                        </div>;
+                                    })}
                                     <Button
                                         type="button"
                                         variant="outline"
                                         className="w-full"
-                                        onClick={() => appendTier({ qty: tierFields.length + 1, label: "", originalPrice: 0, finalPrice: 0 })}
+                                        onClick={() => {
+                                            const nextQty = Math.max(1, ...(form.getValues("pricingTiers") || []).map((tier: any) => Number(tier.qty) || 0)) + 1;
+                                            const referencePrice = Number(form.getValues("pricing.price")) || 0;
+                                            appendTier({ qty: nextQty, label: "", originalPrice: referencePrice, finalPrice: referencePrice, bundlePrice: bundleOnly ? referencePrice * nextQty : null });
+                                        }}
                                     >
-                                        <Plus className="w-4 h-4 mr-2" /> إضافة كمية
+                                        <Plus className="w-4 h-4 mr-2" /> إضافة عرض كمية
                                     </Button>
+                                    {form.formState.errors.pricingTiers?.message && <p className="text-sm text-destructive" role="alert">{String(form.formState.errors.pricingTiers.message)}</p>}
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -1238,6 +1319,10 @@ export default function ProductDetails() {
                     </Tabs>
                 </form>
             </Form>
+            {isEditing && <details className="rounded-xl border bg-card p-4">
+                <summary className="cursor-pointer font-semibold">الفيديو والمنتجات المكملة</summary>
+                <div className="pt-4"><ProductContentEditor productId={productId} /></div>
+            </details>}
         </div>
     );
 }

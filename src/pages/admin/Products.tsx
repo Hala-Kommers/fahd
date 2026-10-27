@@ -26,6 +26,9 @@ type AdminProductListItem = {
   category?: string;
   sku?: string;
   price?: number;
+  bundleOnly?: boolean;
+  startingPrice?: number;
+  startingQty?: number;
   stockTotal?: number;
   primaryImage?: string;
   images?: { url: string; isPrimary?: boolean }[];
@@ -153,7 +156,8 @@ export default function ProductsPage() {
             product.image ||
             null;
 
-          const displayPrice = product.pricing?.price ?? product.price ?? 0;
+          const usesStartingPrice = product.startingPrice != null && (product.bundleOnly || product.startingQty === 1);
+          const displayPrice = usesStartingPrice ? product.startingPrice : product.pricing?.price ?? product.price ?? 0;
           const displayCurrency = product.pricing?.currency ?? "SAR";
           const displayCategory =
             product.categoryName ?? product.category ?? "";
@@ -230,13 +234,22 @@ export default function ProductsPage() {
                     {displaySku && <span>SKU: {displaySku}</span>}
                     <span className="hidden sm:inline">|</span>
                     <span className="font-medium text-foreground">
-                      {displayPrice} {displayCurrency}
+                      {product.bundleOnly ? usesStartingPrice ? `باقة ${product.startingQty ?? ""} قطع: ` : "مرجع القطعة: " : ""}{displayPrice} {displayCurrency}
                     </span>
                     {stockDisplay}
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-1 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLocation(`/admin/products/${product.id}?tab=pricing`)}
+                    data-testid={`button-edit-price-${product.id}`}
+                  >
+                    تعديل السعر
+                  </Button>
                   <Button asChild variant="outline" size="sm" className="gap-1 rounded-lg">
                     <a href={`/product/${product.id}`} target="_blank" rel="noopener noreferrer" aria-label={`صفحة ${product.title}`}><ExternalLink className="h-4 w-4" /><span className="hidden sm:inline">صفحة المنتج</span></a>
                   </Button>
@@ -244,16 +257,17 @@ export default function ProductsPage() {
                     <a href={`/chat/product/${product.id}`} target="_blank" rel="noopener noreferrer" aria-label={`شات ${product.title}`}><MessageCircle className="h-4 w-4" /><span className="hidden sm:inline">شات المنتج</span></a>
                   </Button>
                   <Button
-                    size="icon"
-                    variant="ghost"
+                    size="sm"
+                    variant="outline"
                     onClick={() => setLocation(`/admin/products/${product.id}`)}
                     data-testid={`button-edit-product-${product.id}`}
                   >
-                    <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                    <Pencil className="w-4 h-4 ml-1" /> تعديل المنتج
                   </Button>
                   <Button
                     size="icon"
                     variant="ghost"
+                    aria-label={`حذف ${product.title}`}
                     onClick={() => setDeleteConfirmId(String(product.id))}
                     data-testid={`button-delete-product-${product.id}`}
                   >
