@@ -18,6 +18,12 @@ export function normalizeNationalAddress(value: string) {
   return normalizeDigits(value).replace(/\s/g, '').toUpperCase();
 }
 
+export function formatDeliveryAddress(address: string, nationalAddress: string) {
+  const detailedAddress = address.trim();
+  const shortAddress = normalizeNationalAddress(nationalAddress);
+  return shortAddress ? `${detailedAddress}\nالعنوان الوطني المختصر: ${shortAddress}` : detailedAddress;
+}
+
 function validSaudiPhone(value: string) {
   let phone = normalizeDigits(value)
     .replace(/[\s()-]/g, '')
@@ -39,8 +45,7 @@ export function validateCheckoutDetails(details: CheckoutDetails): CheckoutError
   else if (!/^\d+$/.test(city) || !Number.isSafeInteger(Number(city)) || Number(city) <= 0) errors.cityId = 'اختر مدينة من القائمة.';
 
   const nationalAddress = normalizeNationalAddress(details.nationalAddress);
-  if (!nationalAddress) errors.nationalAddress = 'اكتب العنوان الوطني المختصر من تطبيق سبل.';
-  else if (!/^[A-Z]{4}\d{4}$/.test(nationalAddress)) errors.nationalAddress = 'العنوان المختصر: ٤ أحرف إنجليزية ثم ٤ أرقام، مثل ABCD1234.';
+  if (nationalAddress && !/^[A-Z]{4}\d{4}$/.test(nationalAddress)) errors.nationalAddress = 'العنوان المختصر: ٤ أحرف إنجليزية ثم ٤ أرقام، مثل ABCD1234.';
 
   if (!details.addressRaw.trim()) errors.addressRaw = 'اكتب الحي والشارع ورقم المبنى لتوصيل طلبك.';
   return errors;

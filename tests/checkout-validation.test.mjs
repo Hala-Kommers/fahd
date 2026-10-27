@@ -5,7 +5,7 @@ import ts from 'typescript';
 
 const source = await readFile(new URL('../src/lib/checkout-validation.ts', import.meta.url), 'utf8');
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
-const { normalizeNationalAddress, validateCheckoutDetails } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
+const { formatDeliveryAddress, normalizeNationalAddress, validateCheckoutDetails } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`);
 
 const valid = {
   customerName: 'محمد',
@@ -27,9 +27,16 @@ test('national address normalization supports pasted lowercase and regional digi
   assert.deepEqual(validateCheckoutDetails({ ...valid, nationalAddress: ' ab cd ١٢٣٤ ' }), {});
 });
 
+test('national address is optional but checked when supplied', () => {
+  assert.deepEqual(validateCheckoutDetails({ ...valid, nationalAddress: '' }), {});
+  assert.deepEqual(validateCheckoutDetails({ ...valid, nationalAddress: '   ' }), {});
+  assert.equal(formatDeliveryAddress(' حي النزهة، شارع الملك ', ''), 'حي النزهة، شارع الملك');
+  assert.equal(formatDeliveryAddress(' حي النزهة، شارع الملك ', ' ab cd ١٢٣٤ '), 'حي النزهة، شارع الملك\nالعنوان الوطني المختصر: ABCD1234');
+});
+
 test('all required fields return actionable Arabic errors for empty or whitespace values', () => {
   const errors = validateCheckoutDetails(Object.fromEntries(Object.keys(valid).map(key => [key, '   '])));
-  assert.deepEqual(Object.keys(errors).sort(), Object.keys(valid).sort());
+  assert.deepEqual(Object.keys(errors).sort(), Object.keys(valid).filter(key => key !== 'nationalAddress').sort());
   for (const message of Object.values(errors)) assert.match(message, /[\u0600-\u06ff]/);
 });
 

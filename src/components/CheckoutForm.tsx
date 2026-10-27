@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { getAnalyticsIdentity } from '@/lib/analytics';
 import { chatCredentials, engageChat, money, normalizePhone, trackCommerce, trackingURL, validPhone, type CheckoutItem, type Quote, type Receipt } from '@/lib/commerce';
-import { normalizeNationalAddress, validateCheckoutDetails, type CheckoutDetails } from '@/lib/checkout-validation';
+import { formatDeliveryAddress, normalizeNationalAddress, validateCheckoutDetails, type CheckoutDetails } from '@/lib/checkout-validation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, ChevronDown, CircleHelp, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
@@ -60,7 +60,7 @@ export default function CheckoutForm({items,source='chat',onSuccess,onPendingCha
  useEffect(()=>{if(!quote)return;if(oldPrice.current!==null&&oldPrice.current!==quote.grandTotal)setNotice('تم تحديث الإجمالي. راجع السعر والشحن قبل إرسال الطلب.');if(oldSubtotal.current!==null&&oldSubtotal.current!==quote.subtotal)void qc.invalidateQueries({queryKey:['/api/products']});oldPrice.current=quote.grandTotal;oldSubtotal.current=quote.subtotal},[quote,qc]);
  const order=useMutation({mutationFn:async()=>{
  if(!quote||!validPhone(form.customerPhone))throw new Error('راجع بيانات الطلب');
- const r=await apiRequest('POST','/api/orders',{...payload,...form,customerName:form.customerName.trim(),nationalAddress:normalizeNationalAddress(form.nationalAddress),cityId:Number(form.cityId),customerPhone:normalizePhone(form.customerPhone),addressRaw:`${form.addressRaw.trim()}\nالعنوان الوطني المختصر: ${normalizeNationalAddress(form.nationalAddress)}`,paymentMethod:'cod',visitorId:getAnalyticsIdentity().visitorId,quoteId:quote.quoteId,idempotencyKey});return (await r.json()).data as Receipt;
+ const r=await apiRequest('POST','/api/orders',{...payload,...form,customerName:form.customerName.trim(),nationalAddress:normalizeNationalAddress(form.nationalAddress),cityId:Number(form.cityId),customerPhone:normalizePhone(form.customerPhone),addressRaw:formatDeliveryAddress(form.addressRaw,form.nationalAddress),paymentMethod:'cod',visitorId:getAnalyticsIdentity().visitorId,quoteId:quote.quoteId,idempotencyKey});return (await r.json()).data as Receipt;
  },onSuccess:r=>{setReceipt(r);void trackTikTokPurchase(r);trackingURL(r);sessionStorage.removeItem(idemStorage);sessionStorage.removeItem('checkout_details');void qc.invalidateQueries({queryKey:['/api/products']});onSuccess?.(r)},onError:e=>{if(source==='chat')trackCommerce('checkout_error',productId,{reason:e.message.includes('PRICE_CHANGED')?'price_changed':'validation_or_server'});if(e.message.includes('PRICE_CHANGED')){setNotice('انتهى العرض أو تغير السعر. راجع الإجمالي الجديد، ثم اضغط إرسال الطلب للموافقة عليه.');void qc.invalidateQueries({queryKey:['/api/products']});void refetch()}},onSettled:()=>{sending.current=false}});
  useEffect(()=>{onPendingChange?.(order.isPending)},[order.isPending,onPendingChange]);
  const errors=validateCheckoutDetails(form);
@@ -68,7 +68,7 @@ export default function CheckoutForm({items,source='chat',onSuccess,onPendingCha
  const fields=(key:Field,value:string)=>{setForm(f=>({...f,[key]:value}));if(order.error)order.reset()};
  const touch=(key:Field)=>setTouched(current=>({...current,[key]:true}));
  const fieldProps=(key:Field)=>({
-  id:`${formId}-${key}`,name:key,required:true,
+  id:`${formId}-${key}`,name:key,required:key!=='nationalAddress',
   ref:(element:HTMLInputElement|HTMLSelectElement|null)=>{fieldRefs.current[key]=element},
   onBlur:()=>touch(key),
   'aria-invalid':!!(touched[key]&&errors[key]),
@@ -111,7 +111,7 @@ export default function CheckoutForm({items,source='chat',onSuccess,onPendingCha
      {fieldError('cityId')}
     </div>
     <div className="grid content-start gap-1">
-     <label htmlFor={`${formId}-nationalAddress`} className="checkout-label">العنوان الوطني المختصر</label>
+     <label htmlFor={`${formId}-nationalAddress`} className="checkout-label">العنوان الوطني المختصر <span className="font-normal text-muted-foreground">(اختياري)</span></label>
      <Input {...fieldProps('nationalAddress')} className="checkout-input text-left" dir="ltr" autoCapitalize="characters" spellCheck={false} placeholder="ABCD1234" value={form.nationalAddress} onChange={e=>fields('nationalAddress',normalizeNationalAddress(e.target.value))}/>
      {fieldError('nationalAddress')}
     </div>
@@ -154,7 +154,7 @@ function CheckoutHelp({items}:{items:CheckoutItem[]}){
    <Button type="button" variant="ghost" className="checkout-help min-h-11 gap-1 px-0 text-xs text-muted-foreground" aria-expanded={open==='address'} aria-controls={`${helpId}-address`} onClick={()=>setOpen(open==='address'?null:'address')}><CircleHelp aria-hidden="true"/>العنوان الوطني؟</Button>
    <Button type="button" variant="ghost" className="checkout-help min-h-11 gap-1 px-0 text-xs" aria-expanded={open==='policy'} aria-controls={`${helpId}-policy`} onClick={()=>setOpen(open==='policy'?null:'policy')}><ShieldCheck aria-hidden="true" className="text-emerald-700 dark:text-emerald-300"/>الاسترجاع والضمان<ChevronDown aria-hidden="true" className="chat-disclosure-icon h-3 w-3"/></Button>
   </div>
-  <div id={`${helpId}-address`} hidden={open!=='address'} className="pb-2 leading-relaxed text-muted-foreground">تلقى العنوان الوطني المختصر في تطبيق سبل ضمن عنوانك: ٤ أحرف إنجليزية و٤ أرقام، مثل <bdi dir="ltr">ABCD1234</bdi>.</div>
+  <div id={`${helpId}-address`} hidden={open!=='address'} className="pb-2 leading-relaxed text-muted-foreground">تقدر تكمل الطلب بدونه. لو متوفر، تلقاه في تطبيق سبل: ٤ أحرف إنجليزية و٤ أرقام، مثل <bdi dir="ltr">ABCD1234</bdi>.</div>
   <div id={`${helpId}-policy`} hidden={open!=='policy'} className="pb-2 leading-relaxed">{error?<div role="alert"><p>تعذر تحميل سياسة المنتج.</p><Button type="button" variant="outline" onClick={()=>void refetch()}>إعادة المحاولة</Button></div>:data.length===0?<p role="status">جار تحميل سياسة المنتج…</p>:data.map(p=>{const policies=p.faq?.filter(f=>/استرجاع|استبدال|ضمان|return|warranty/i.test(f.question))||[];return <div className="mt-2 space-y-1" key={p.title}><b>{p.title}</b>{policies.length?policies.map(f=><p key={f.question}>{f.answer}</p>):<><p>الاسترجاع والاستبدال خلال ١٤ يومًا من الاستلام، بشرط بقاء المنتج بحالته الأصلية وغير مستخدم ومع التغليف.</p><p>ضمان المنتج يشمل عيوب التصنيع حسب حالة المنتج. تواصل معنا برقم الطلب وصورة العيب للمراجعة.</p></>}</div>})}</div>
  </div>
 }
