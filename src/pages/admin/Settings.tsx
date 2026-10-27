@@ -13,20 +13,17 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save, Bot, MessageSquare, KeyRound, SlidersHorizontal, CheckCircle2, XCircle, ShieldCheck, BarChart3 } from "lucide-react";
+import { Loader2, Save, Bot, MessageSquare, KeyRound, SlidersHorizontal, CheckCircle2, XCircle, ShieldCheck, BarChart3, RefreshCw } from "lucide-react";
 
 const PROVIDERS = [
-  { label: "Google", value: "google" },
+  { label: "Google AI Studio", value: "google" },
 ];
 
-const MODELS_BY_PROVIDER: Record<string, { label: string; value: string }[]> = {
-  google: [
-    { label: "Gemini 3.8 Flash", value: "gemini-3.8-flash" },
-    { label: "Gemini 2.0 Flash", value: "gemini-2.0-flash" },
-    { label: "Gemini 2.5 Flash", value: "gemini-2.5-flash" },
-    { label: "Gemini 3.0 Pro", value: "gemini-3.0-pro" },
-    { label: "Gemini 3.0 Flash", value: "gemini-3.0-flash" },
-  ],
+const DEFAULT_GOOGLE_MODEL = "gemini-3.8-flash";
+
+type GoogleModels = {
+  models: Array<{ id: string; displayName: string }>;
+  defaultModel: string;
 };
 
 type BotConfig = {
@@ -85,7 +82,7 @@ function UsageMetrics({ messages, promptTokens, completionTokens }: { messages: 
 
 const DEFAULT_CONFIG: BotConfig = {
   provider: "google",
-  model: "gemini-2.0-flash",
+  model: DEFAULT_GOOGLE_MODEL,
   hasApiKey: false,
   temperature: 0.7,
   maxTokens: 1000,
@@ -117,6 +114,8 @@ function normalizeConfig(config?: Partial<BotConfig> | null): BotConfig {
   return {
     ...DEFAULT_CONFIG,
     ...config,
+    provider: "google",
+    model: config.model?.trim().replace(/^google\//, "").replace(/^models\//, "") || DEFAULT_GOOGLE_MODEL,
     hasApiKey: !!config.hasApiKey,
     persona: {
       ...DEFAULT_CONFIG.persona,
@@ -163,6 +162,17 @@ export default function BotSettingsPage() {
     queryFn: fetchAIStats,
   });
 
+  const { data: googleModels, error: modelsError, isFetching: modelsLoading, refetch: refreshModels } = useQuery<GoogleModels>({
+    queryKey: ["/api/admin/bot/models"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/bot/models");
+      const body = await res.json();
+      return body.data;
+    },
+    enabled: !!serverConfig?.hasApiKey,
+    staleTime: 5 * 60 * 1000,
+  });
+
   useEffect(() => {
     setConfig(normalizeConfig(serverConfig));
     setApiKey("");
@@ -173,6 +183,7 @@ export default function BotSettingsPage() {
     mutationFn: async (payload: Record<string, unknown>) => apiRequest("PATCH", "/api/admin/bot/config", payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/admin/bot/config"] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/admin/bot/models"] });
       setApiKey("");
       setApiKeyMode("preserve");
       toast({ title: "تم حفظ إعدادات فهد" });
@@ -195,42 +206,64 @@ export default function BotSettingsPage() {
       customInstructions: config.customInstructions,
     };
 
-    if (apiKeyMode === "update") next.apiKey = apiKey;
+    if (apiKeyMode === "update") next.apiKey = apiKey.trim();
     if (apiKeyMode === "clear") next.apiKey = "";
 
     return next;
   }, [apiKey, apiKeyMode, config]);
 
-  const modelOptions = MODELS_BY_PROVIDER[config?.provider || DEFAULT_CONFIG.provider] || MODELS_BY_PROVIDER.google;
+  const modelOptions = useMemo(() => {
+    const options = googleModels?.models?.length
+      ? googleModels.models.map((model) => ({ label: model.displayName || model.id, value: model.id }))
+      : [{ label: "Gemini 3.8 Flash", value: DEFAULT_GOOGLE_MODEL }];
+    if (config?.model && !options.some((model) => model.value === config.model)) {
+      options.unshift({ label: `${config.model} (الإعداد الحالي)`, value: config.model });
+    }
+    return options;
+  }, [config?.model, googleModels]);
+  const connectionBusy = testState === "loading" || updateMutation.isPending;
   const providerStats = Array.isArray(aiStats?.byProvider) ? aiStats.byProvider : [];
   const modelStats = Array.isArray(aiStats?.byModel) ? aiStats.byModel : [];
   const statusStats = Array.isArray(aiStats?.byStatus) ? aiStats.byStatus : [];
 
   const handleSave = () => {
     if (!payload) return;
+    if (apiKeyMode === "update" && apiKey.trim()) {
+      void handleTestConnection();
+      return;
+    }
     updateMutation.mutate(payload);
+  };
+
+  const resetConnectionTest = () => {
+    setTestState("idle");
+    setTestMessage("");
   };
 
   const handleTestConnection = async () => {
     setTestState("loading");
     setTestMessage("");
+    let verified = false;
     try {
       if (!payload) throw new Error("انتظر تحميل الإعدادات أولًا");
-      if (!apiKey.trim() && !config?.hasApiKey) throw new Error("أدخل مفتاح Google AI Studio أولًا");
-      await updateMutation.mutateAsync(payload);
-      const res = await apiRequest("POST", "/api/admin/bot/test-connection");
+      if (apiKeyMode === "clear" || (!apiKey.trim() && !config?.hasApiKey)) throw new Error("أدخل مفتاح Google AI Studio أولًا");
+      const draft: Record<string, unknown> = { provider: config?.provider, model: config?.model };
+      if (apiKeyMode === "update") draft.apiKey = apiKey.trim();
+      const res = await apiRequest("POST", "/api/admin/bot/test-connection", draft);
       const data = await res.json();
       const result = data?.data ?? data;
-    if (result?.ok) {
-        setTestState("success");
-        setTestMessage(`متصل: ${result.provider}`);
-      } else {
-        setTestState("error");
-      setTestMessage(data?.details || data?.error || "تعذّر اختبار الاتصال");
+      if (result?.ok !== true || result?.streamVerified !== true) {
+        throw new Error(data?.error || "لم يتم تأكيد استلام رد فعلي من Google. تأكد من تحديث الباك وأعد الاختبار.");
       }
+      verified = true;
+      await updateMutation.mutateAsync(payload);
+      setTestState("success");
+      const seconds = (Number(result.latencyMs) / 1000).toLocaleString("ar-SA", { maximumFractionDigits: 1 });
+      setTestMessage(`المفتاح صحيح والاتصال بـ Google ناجح. تم حفظ الإعدادات واستلام رد فعلي من ${result.model} خلال ${seconds} ثانية.${config?.enabled ? " تُستخدم هذه الإعدادات في ردود فهد." : " فعّل المساعد لبدء الردود في الشات."}`);
+      toast({ title: "المفتاح صحيح والاتصال ناجح", description: "تم اختبار رد Google وحفظ إعدادات الربط." });
     } catch (error: any) {
       setTestState("error");
-      setTestMessage(error?.message || "تعذّر الوصول للسيرفر");
+      setTestMessage(`${verified ? "المفتاح صحيح، لكن تعذر حفظ الإعدادات: " : ""}${error?.message || "تعذّر الوصول للسيرفر"}`);
     }
   };
 
@@ -249,7 +282,7 @@ export default function BotSettingsPage() {
           <h1 className="text-2xl font-bold tracking-tight">إعدادات فهد</h1>
           <p className="text-muted-foreground">إدارة مزود الذكاء الاصطناعي، المفتاح، والشخصية.</p>
         </div>
-        <Button onClick={handleSave} disabled={updateMutation.isPending} className="gap-2">
+        <Button onClick={handleSave} disabled={connectionBusy} className="gap-2">
           {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           حفظ التغييرات
         </Button>
@@ -268,7 +301,7 @@ export default function BotSettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>مزود الاتصال</CardTitle>
-              <CardDescription>الحقول هنا تطابق الاستجابة والطلب الموثقين</CardDescription>
+              <CardDescription>اربط مفتاح Google AI Studio بفهد واختبر ردًا فعليًا قبل اعتماده.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between border p-4 rounded-lg gap-3">
@@ -276,13 +309,13 @@ export default function BotSettingsPage() {
                   <Label>تفعيل المساعد</Label>
                   <p className="text-sm text-muted-foreground">تشغيل أو إيقاف الرد الآلي</p>
                 </div>
-                <Switch checked={config.enabled} onCheckedChange={(enabled) => setConfig((prev) => prev ? { ...prev, enabled } : prev)} />
+                <Switch checked={config.enabled} disabled={connectionBusy} onCheckedChange={(enabled) => { resetConnectionTest(); setConfig((prev) => prev ? { ...prev, enabled } : prev); }} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>المزود</Label>
-                  <Select value={config.provider} onValueChange={(provider) => setConfig((prev) => prev ? { ...prev, provider, model: MODELS_BY_PROVIDER[provider]?.[0]?.value || prev.model } : prev)}>
+                  <Select value={config.provider} disabled={connectionBusy} onValueChange={(provider) => { resetConnectionTest(); setConfig((prev) => prev ? { ...prev, provider } : prev); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {PROVIDERS.map((provider) => <SelectItem key={provider.value} value={provider.value}>{provider.label}</SelectItem>)}
@@ -290,19 +323,25 @@ export default function BotSettingsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>الموديل</Label>
-                  <Select value={config.model} onValueChange={(model) => setConfig((prev) => prev ? { ...prev, model } : prev)}>
-                    <SelectTrigger><SelectValue placeholder="اختر الموديل" /></SelectTrigger>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>الموديل</Label>
+                    <Button type="button" size="sm" variant="ghost" className="h-6 gap-1 px-1 text-xs" disabled={!config.hasApiKey || modelsLoading || connectionBusy} onClick={() => void refreshModels()}>
+                      <RefreshCw className={`h-3 w-3 ${modelsLoading ? "animate-spin" : ""}`} /> تحديث الموديلات
+                    </Button>
+                  </div>
+                  <Select value={config.model} disabled={connectionBusy} onValueChange={(model) => { resetConnectionTest(); setConfig((prev) => prev ? { ...prev, model } : prev); }}>
+                    <SelectTrigger className="min-w-0"><SelectValue placeholder="اختر الموديل" /></SelectTrigger>
                     <SelectContent>
                       {modelOptions.map((model) => <SelectItem key={model.value} value={model.value}>{model.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">{modelsError ? `تعذر تحديث القائمة: ${modelsError.message}` : googleModels ? "الموديلات المتاحة من Google للمفتاح المحفوظ؛ اختبار الرد يؤكد إمكانية الاستخدام." : "بعد حفظ المفتاح، تُحدّث القائمة مباشرة من Google."}</p>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <Label>API Key</Label>
+                  <Label htmlFor="google-api-key">مفتاح Google AI Studio</Label>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-[10px]">
                       {config.hasApiKey ? "مخزن" : "غير موجود"}
@@ -310,26 +349,31 @@ export default function BotSettingsPage() {
                     {apiKeyMode === "clear" && <Badge className="text-[10px] bg-destructive/10 text-destructive border-0">سيتم المسح</Badge>}
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Input
+                    id="google-api-key"
                     type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={connectionBusy}
                     value={apiKey}
                     placeholder={config.hasApiKey ? "اتركه فارغاً للمحافظة على المفتاح المخزن" : "أدخل مفتاحاً جديداً"}
                     onChange={(e) => {
                       setApiKey(e.target.value);
-                      setApiKeyMode(e.target.value ? "update" : config.hasApiKey ? "preserve" : "update");
-                      setTestState("idle");
+                      setApiKeyMode(e.target.value.trim() ? "update" : config.hasApiKey ? "preserve" : "update");
+                      resetConnectionTest();
                     }}
-                    className="flex-1"
+                    className="min-w-0 flex-1 basis-56"
                   />
                   {config.hasApiKey && (
                     <Button
                       type="button"
                       variant="outline"
+                      disabled={connectionBusy}
                       onClick={() => {
                         setApiKey("");
                         setApiKeyMode("clear");
-                        setTestState("idle");
+                        resetConnectionTest();
                       }}
                       className="min-w-[120px]"
                     >
@@ -341,15 +385,15 @@ export default function BotSettingsPage() {
                     type="button"
                     variant="outline"
                     onClick={handleTestConnection}
-                    disabled={testState === "loading"}
+                    disabled={connectionBusy}
                     className="min-w-[140px]"
                   >
                     {testState === "loading" ? <Loader2 className="w-4 h-4 animate-spin" /> : testState === "success" ? <CheckCircle2 className="w-4 h-4" /> : testState === "error" ? <XCircle className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
-                    {testState === "loading" ? "جاري الاختبار..." : testState === "success" ? "تم الاتصال" : testState === "error" ? "فشل الاتصال" : "اختبار الاتصال"}
+                    {testState === "loading" ? "جاري التحقق من Google..." : testState === "success" ? "المفتاح صحيح ✓" : testState === "error" ? "إعادة الاختبار" : "حفظ واختبار الاتصال"}
                   </Button>
                 </div>
                 {testMessage && (
-                  <p className={`text-xs rounded px-2 py-1 ${testState === "success" ? "text-green-700 bg-green-50" : "text-destructive bg-destructive/5"}`}>
+                  <p role={testState === "error" ? "alert" : "status"} aria-live="polite" className={`break-words text-sm leading-relaxed rounded-lg px-3 py-2 ${testState === "success" ? "text-green-800 bg-green-50 border border-green-200" : "text-destructive bg-destructive/5"}`}>
                     {testMessage}
                   </p>
                 )}

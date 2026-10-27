@@ -232,7 +232,7 @@ export const botClosingSchema = z.object({
 export const botConfigSchema = z.object({
   id: z.string().default("bot_config_main"),
   provider: z.enum(["google"]).default("google"),
-  model: z.string().default("gemini-2.0-flash"),
+  model: z.string().default("gemini-3.8-flash"),
   apiKey: z.string().optional(), // In practice, handle securely
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.number().default(1000),
