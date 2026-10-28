@@ -6,6 +6,7 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ensureChatSession, trackCommerce, attribution, money } from "@/lib/commerce";
 import { getPurchaseOffers, getTierTotal } from "@/lib/pricing";
+import { trackTikTokChatMessage, trackTikTokEvent } from "@/lib/tiktok";
 import { apiRequest } from "@/lib/queryClient";
 import { mergeChatTimeline } from "@/lib/chat-timeline";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFahd } from "@/lib/fahd-store";
 import { useToast } from "@/hooks/use-toast";
 import { getAnalyticsIdentity } from "@/lib/analytics";
-import ChatProductActions, { ChatCommerceCard, type CommercePanel } from "@/components/ChatProductActions";
+import { ChatCommerceCard, type CommercePanel } from "@/components/ChatProductActions";
 import OfferCards from "@/components/OfferCards";
 import ChatOfferBanner from "@/components/ChatOfferBanner";
 import {
@@ -532,6 +533,7 @@ export default function ChatPage() {
   const [cities, setCities] = useState<CityOption[]>([]);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const openCommerce = useCallback((panel: CommercePanel, quantity?: number, productId?: number, variantId?: number) => {
+    if (panel === 'order') void trackTikTokEvent('InitiateCheckout');
     setMessages(prev => [...prev, {
       id: `commerce-${generateId()}`, sender: 'fahd', text: '',
       commerce: { panel, quantity, productId: productId ?? chatProductContext?.productId, variantId: variantId ?? chatProductContext?.variantId ?? undefined },
@@ -546,6 +548,7 @@ export default function ChatPage() {
   const [isReady, setIsReady] = useState(false);
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const latestMessageRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const heartbeatTimerRef = useRef<number | null>(null);
@@ -563,7 +566,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!isHistoryLoaded || !offerProduct || !chatProductContext || messages.length) return;
     const text = `هلا والله 👋 معك فهد. شفت إنك مهتم بـ**${offerProduct.title}**، وهو متوفر بأكثر من عرض. إذا تبي أطلع لك الأوفر بينهم وأضبط لك الطلب مباشرة.`;
-    setMessages([{ id: `welcome-${sessionId}-${offerProduct.id}`, sender: 'fahd', text, actions: [{ type: 'quick_reply', payload: { label: 'أظهر العروض', message: 'العروض' } }, { type: 'quick_reply', payload: { label: 'استفسار عن المنتج', message: 'وش أهم مميزات هذا المنتج ولمن يناسب؟' } }] }]);
+    setMessages([{ id: `welcome-${sessionId}-${offerProduct.id}`, sender: 'fahd', text, actions: [{ type: 'quick_reply', payload: { label: 'أظهر العروض', message: 'العروض' } }, { type: 'quick_reply', payload: { label: 'استفسار عن المنتج', message: 'وش أهم مميزات هذا المنتج ولمن يناسب؟' } }, { type: 'quick_reply', payload: { label: 'اطلب الآن', message: 'اطلب الآن' } }] }]);
   }, [isHistoryLoaded, offerProduct, chatProductContext, messages.length, sessionId]);
 
   const updateMessage = useCallback((messageId: string, updater: (message: ChatMsg) => ChatMsg) => {
@@ -726,6 +729,9 @@ export default function ChatPage() {
       }
 
       if (data.type === "ai_done") {
+        if (Array.isArray(data.actions) && data.actions.some((action: ChatAction) => action.type === 'checkout' || action.type === 'address_form')) {
+          void trackTikTokEvent('InitiateCheckout');
+        }
  const messageId = typingMessageIdRef.current;
         const finalText = getAiEventText(data) || streamingTextRef.current;
 
@@ -754,7 +760,7 @@ export default function ChatPage() {
 
       if (data.type === "ai_error") {
         const messageId = typingMessageIdRef.current;
-        setMessages((prev) => [...prev.filter(m=>m.id!==messageId), { id: messageId || generateId(), sender: "fahd", text: "تعذر إكمال الرد الآن. تقدر تشوف العروض وتطلب من الأزرار أسفل المحادثة." }]);
+        setMessages((prev) => [...prev.filter(m=>m.id!==messageId), { id: messageId || generateId(), sender: "fahd", text: "تعذر إكمال الرد الآن. تقدر تشوف العروض وتطلب من الاختيارات داخل المحادثة." }]);
         typingMessageIdRef.current = null;
         streamingTextRef.current = "";
         setIsTyping(false);
@@ -844,7 +850,12 @@ export default function ChatPage() {
   }, [messages, sessionId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+    const latestMessage = messages[messages.length - 1];
+    if (latestMessage?.commerce) {
+      latestMessageRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+    }
   }, [messages, isTyping, reduceMotion]);
 
   useEffect(() => {
@@ -866,6 +877,7 @@ export default function ChatPage() {
  try { selection = JSON.parse(sessionStorage.getItem(`fahd_selection:${localStorage.getItem("chat_session_id")}:${chatProductContext?.productId}`) || "{}"); } catch {}
  const analyticsIdentity = getAnalyticsIdentity();
  trackCommerce("chat_engaged",chatProductContext?.productId);
+ void trackTikTokChatMessage(sessionIdRef.current);
     sendSocketData({
       type: "message",
       content: text,
@@ -903,9 +915,6 @@ export default function ChatPage() {
   const isConnected = connectionStatus === "connected" && isReady;
   const canSend = isConnected && isHistoryLoaded;
   const lastMessage = messages[messages.length - 1];
-  const checkoutIsLatest = lastMessage?.commerce?.panel === 'order'
-    || lastMessage?.actions?.some(action => action.type === 'address_form' || action.type === 'checkout');
-
   return (
     <div className="chat-ui h-[100dvh] min-h-0 overflow-hidden bg-background flex flex-col">
       <header className="shrink-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
@@ -930,7 +939,7 @@ export default function ChatPage() {
         {chatProductContext && (
           <ChatOfferBanner productId={chatProductContext.productId} sessionId={sessionId} />
         )}
-        {chatProductContext && (
+        {chatProductContext && lastMessage?.commerce?.panel !== 'order' && (
           <ProductContextCard
             context={chatProductContext}
             currentProduct={offerProduct}
@@ -975,7 +984,7 @@ export default function ChatPage() {
 
           <div className="space-y-3">
             {messages.map((msg, messageIndex) => (
-              <div key={msg.id} className="chat-message-enter" data-sender={msg.sender} data-chat-message={msg.id}>
+              <div key={msg.id} ref={messageIndex === messages.length - 1 ? latestMessageRef : undefined} className={`chat-message-enter ${msg.commerce ? "-mx-2 scroll-mt-2" : ""}`} data-sender={msg.sender} data-chat-message={msg.id}>
                 {msg.commerce ? <ChatCommerceCard cardId={msg.id} {...msg.commerce} onChoose={(quantity, productId, variantId) => openCommerce('order', quantity, productId, variantId)} /> : <>
                 <div className={`flex gap-2 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}>
                   {msg.sender === "fahd" && (
@@ -1049,8 +1058,7 @@ export default function ChatPage() {
       </div>
 
       <div className="shrink-0 bg-background/90 backdrop-blur-xl border-t border-border/50 px-3 py-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
-        <div className="max-w-2xl mx-auto space-y-1">
-          {!checkoutIsLatest && <ChatProductActions onOpen={openCommerce} />}
+        <div className="max-w-2xl mx-auto">
           <div className="flex gap-2">
               <Input
                 value={inputText}

@@ -75,10 +75,10 @@ export function ChatCommerceCard({ cardId, panel, productId, quantity: initialQu
   const orderQuantity = product?.bundleOnly && !quantities.includes(quantity) ? (quantities[0] ?? 0) : quantity;
   const productImage = product?.primaryImage || product?.images?.find((image: any) => image.isPrimary)?.url || product?.images?.[0]?.url;
 
-  return <section dir="rtl" className="rounded-2xl border bg-card p-3 space-y-2" aria-label={panelTitle} data-commerce-card={panel}>
+  return <section dir="rtl" className="rounded-2xl border border-emerald-200/70 bg-card p-4 shadow-md space-y-2 dark:border-emerald-800/70" aria-label={panelTitle} data-commerce-card={panel}>
     <div className="flex items-center justify-between gap-2">
       {productImage && <img src={productImage} alt="" loading="lazy" decoding="async" className="h-11 w-11 shrink-0 rounded-lg object-cover"/>}
-      <div className="min-w-0 flex-1"><h3 className="font-bold text-sm">{panelTitle}</h3>{product && <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{product.title}</p>}</div>
+      <div className="min-w-0 flex-1"><h3 className="font-bold text-base">{panelTitle}</h3>{product && <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{product.title}</p>}</div>
       <Button type="button" variant="ghost" disabled={busy} className="chat-press h-11 min-h-11 w-11 shrink-0 p-0 text-xs" aria-label={expanded ? 'طي التفاصيل' : 'عرض التفاصيل'} aria-expanded={expanded} onClick={() => setExpanded(value => !value)}><ChevronDown aria-hidden="true" className="chat-disclosure-icon h-4 w-4" /></Button>
     </div>
     <div hidden={!expanded} className="chat-card-content space-y-2">

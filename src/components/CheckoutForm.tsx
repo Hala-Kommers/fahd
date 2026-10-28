@@ -1,4 +1,4 @@
-import { trackTikTokPurchase } from '@/lib/tiktok';
+import { trackTikTokEvent, trackTikTokPurchase } from '@/lib/tiktok';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -38,6 +38,7 @@ export default function CheckoutForm({items,source='chat',onSuccess,onPendingCha
  const productId=items[0]?.productId;const oldPrice=useRef<number|null>(null);const oldSubtotal=useRef<number|null>(null);
  const basketKey=JSON.stringify(items);const idemStorage=`checkout_key:${source}:${basketKey}`;
  const [idempotencyKey]=useState(()=>{const old=sessionStorage.getItem(idemStorage);if(old)return old;const key=crypto.randomUUID();sessionStorage.setItem(idemStorage,key);return key});
+ useEffect(()=>{if(source==='cart'&&!initialReceipt)void trackTikTokEvent('InitiateCheckout')},[source,initialReceipt]);
  useEffect(()=>{sessionStorage.setItem('checkout_details',JSON.stringify(form))},[form]);
  useEffect(()=>{
   if(!formRef.current||receipt)return;
@@ -86,7 +87,16 @@ export default function CheckoutForm({items,source='chat',onSuccess,onPendingCha
    if(source==='chat')trackCommerce('checkout_error',productId,{reason:'field_validation',fields:fieldOrder.filter(key=>errors[key])});
    return;
   }
-  if(quote&&ready&&!isFetching&&!quoteError&&!citiesError){sending.current=true;order.mutate()}
+  if(quote&&ready&&!isFetching&&!quoteError&&!citiesError){
+   sending.current=true;
+   void trackTikTokEvent('PlaceAnOrder',{
+    value:quote.grandTotal,
+    currency:quote.currency||'SAR',
+    content_type:'product',
+    contents:quote.items.map(item=>({content_id:String(item.productId),quantity:item.qty,price:item.unitPrice})),
+   },`place:${idempotencyKey}`);
+   order.mutate();
+  }
  }
  if(receipt)return <motion.div initial={reduced||initialReceipt?false:{opacity:0,scale:.96,y:8}} animate={{opacity:1,scale:1,y:0}} transition={{type:'spring',stiffness:320,damping:25}} className="overflow-hidden rounded-3xl bg-emerald-50 dark:bg-emerald-950/30 p-6 text-center space-y-4" role="status"><div className="checkout-success-mark" data-celebrate={!initialReceipt} aria-hidden="true"><span className="checkout-success-ring"/><div className="checkout-success-seal"><svg viewBox="0 0 40 40" fill="none"><path d="m10 21 7 7 14-16" pathLength="1" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg></div>{[0,1,2,3,4,5].map(i=><span key={i} className="checkout-spark" style={{rotate:`${i*60}deg`}}><i/></span>)}</div><h3 className="text-xl font-bold">استلمنا طلبك بنجاح</h3><p>طلبك قيد المراجعة، والدفع عند الاستلام.</p><p className="font-bold">{receipt.orderNumber}</p>{receipt.items.map((it,i)=><p key={i}>{it.title} · {it.qty} قطعة</p>)}<p className="text-2xl font-bold">{money(receipt.totals.grandTotal)}</p><Button className="chat-press w-full rounded-full" onClick={()=>navigate(trackingURL(receipt))}>تتبع الطلب وتفاصيله</Button><ComplementProducts productId={productId}/></motion.div>;
  return <form ref={formRef} className="checkout-form" noValidate onSubmit={submit} dir="rtl" aria-label="بيانات الطلب">

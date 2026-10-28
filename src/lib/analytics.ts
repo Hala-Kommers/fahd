@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
+import { trackTikTokPage } from "@/lib/tiktok";
 
 const VISITOR_ID_KEY = "fahd_visitor_id";
 const SESSION_ID_KEY = "fahd_session_id";
@@ -37,6 +38,8 @@ export function AnalyticsPageTracker() {
 
   useEffect(() => {
     if (path.startsWith("/admin")) return;
+
+    void trackTikTokPage(path);
 
     const identity = getAnalyticsIdentity();
     apiRequest("POST", "/api/analytics/events", {
